@@ -32,7 +32,8 @@
     },
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.finance"
+      "category": "public.app-category.finance",
+      "identity": null
     },
     "dmg": {
       "title": "Finansal Takip Sistemi"
