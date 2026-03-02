@@ -82,6 +82,18 @@ export function saveData(data: FinansalVeriler): void {
   }
 }
 
+export function resetData(): void {
+  const storage = getStorageAdapter()
+  const defaultJson = JSON.stringify(getDefaultData())
+  storage.setItem(STORAGE_KEY, defaultJson)
+
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.saveData) {
+    ;(window as any).electronAPI.saveData(defaultJson).catch((err: Error) => {
+      console.error('Sıfırlama dosya kaydetme hatası:', err)
+    })
+  }
+}
+
 // Veri yedekleme/geri yükleme fonksiyonları
 export function exportData(): string {
   const storage = getStorageAdapter()

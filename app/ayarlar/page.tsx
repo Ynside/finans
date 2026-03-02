@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CreditCard, Plus, Trash2, DollarSign, Settings, Wallet, Download } from 'lucide-react'
-import { loadData, saveData } from '@/lib/storage'
+import { CreditCard, Plus, Trash2, DollarSign, Settings, Wallet, Download, AlertTriangle } from 'lucide-react'
+import { loadData, saveData, resetData } from '@/lib/storage'
 import { formatPara, parseTutar } from '@/lib/utils'
 import { maasKontrolEt, ekGelirKontrolEt } from '@/lib/finansal'
 import type { FinansalVeriler, EkGelir, KrediKarti } from '@/types'
@@ -24,6 +24,8 @@ export default function AyarlarPage() {
   const [odemeModalOpen, setOdemeModalOpen] = useState(false)
   const [yedeklemeModalOpen, setYedeklemeModalOpen] = useState(false)
   const [seciliKrediKarti, setSeciliKrediKarti] = useState<KrediKarti | null>(null)
+  const [sifirlama, setSifirlama] = useState<'idle' | 'countdown' | 'confirm'>('idle')
+  const [geriSayim, setGeriSayim] = useState(5)
 
   useEffect(() => {
     const data = loadData()
@@ -73,6 +75,36 @@ export default function AyarlarPage() {
     }
     saveData(yeniVeriler)
     setVeriler(yeniVeriler)
+  }
+
+  const handleSifirlaBaslat = () => {
+    setSifirlama('countdown')
+    setGeriSayim(5)
+    const interval = setInterval(() => {
+      setGeriSayim((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          setSifirlama('confirm')
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }
+
+  const handleSifirlaOnayla = () => {
+    resetData()
+    setSifirlama('idle')
+    setGeriSayim(5)
+    const data = loadData()
+    setVeriler(data)
+    setMaasTutar('0')
+    setMaasGun('1')
+  }
+
+  const handleSifirlaIptal = () => {
+    setSifirlama('idle')
+    setGeriSayim(5)
   }
 
   const handleEkGelirDelete = (id: number) => {
@@ -300,6 +332,77 @@ export default function AyarlarPage() {
               <Download className="w-4 h-4 mr-2" />
               Yedekleme Yönetimi
             </Button>
+          </Card>
+
+          {/* Tehlikeli Bölge */}
+          <Card className="premium-card lg:col-span-2 p-4 sm:p-6 border border-red-500/30">
+            <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+              <div className="p-1.5 sm:p-2 rounded-lg bg-red-500/20">
+                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
+              </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-red-400">Tehlikeli Bölge</h2>
+                <p className="text-[10px] sm:text-xs text-white/60">Bu işlemler geri alınamaz</p>
+              </div>
+            </div>
+
+            {sifirlama === 'idle' && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 glass rounded-lg p-3 sm:p-4 border border-red-500/20">
+                <div>
+                  <p className="text-sm font-semibold text-white">Tüm Verileri Sıfırla</p>
+                  <p className="text-xs text-white/50 mt-0.5">Tüm borçlar, harcamalar, bakiye ve ayarlar silinir</p>
+                </div>
+                <Button
+                  onClick={handleSifirlaBaslat}
+                  variant="ghost"
+                  className="text-red-400 hover:bg-red-500/20 border border-red-500/30 text-xs sm:text-sm w-full sm:w-auto flex-shrink-0"
+                >
+                  <Trash2 className="w-4 h-4 mr-1.5" />
+                  Sıfırla
+                </Button>
+              </div>
+            )}
+
+            {sifirlama === 'countdown' && (
+              <div className="glass rounded-lg p-3 sm:p-4 border border-red-500/30 text-center">
+                <p className="text-sm text-white/70 mb-2">Sıfırlama başlatılıyor...</p>
+                <div className="text-4xl font-bold text-red-400 mb-2">{geriSayim}</div>
+                <p className="text-xs text-white/50 mb-3">İptal etmek için aşağıdaki butona tıklayın</p>
+                <Button
+                  onClick={handleSifirlaIptal}
+                  variant="secondary"
+                  className="text-xs sm:text-sm"
+                >
+                  İptal
+                </Button>
+              </div>
+            )}
+
+            {sifirlama === 'confirm' && (
+              <div className="glass rounded-lg p-3 sm:p-4 border border-red-500/40">
+                <p className="text-sm font-semibold text-red-400 mb-1">Son onay</p>
+                <p className="text-xs text-white/60 mb-4">
+                  Tüm verileriniz kalıcı olarak silinecek. Bu işlem geri alınamaz. Emin misiniz?
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={handleSifirlaIptal}
+                    variant="secondary"
+                    className="flex-1 text-xs sm:text-sm"
+                  >
+                    Vazgeç
+                  </Button>
+                  <Button
+                    onClick={handleSifirlaOnayla}
+                    variant="ghost"
+                    className="flex-1 text-xs sm:text-sm text-red-400 hover:bg-red-500/20 border border-red-500/30"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1.5" />
+                    Evet, Sıfırla
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         </div>
       </div>
