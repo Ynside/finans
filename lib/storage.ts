@@ -15,8 +15,31 @@ export function setOnboardingDone(): void {
 }
 
 export function loadData(): FinansalVeriler {
+  // Electron: localStorage'ı bypass et, doğrudan dosyadan oku
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.loadData) {
+    try {
+      const raw = (window as any).electronAPI.loadData()
+      if (raw) {
+        const data = JSON.parse(raw)
+        return {
+          ...getDefaultData(),
+          ...data,
+          maas: data.maas || { tutar: 0, gun: 1 },
+          ek_gelirler: data.ek_gelirler || [],
+          son_maas_tarihi: data.son_maas_tarihi || null,
+          odeme_gecmisi: data.odeme_gecmisi || [],
+          hedefler: data.hedefler || [],
+          kredi_kartlari: data.kredi_kartlari || [],
+          harcamalar: data.harcamalar || [],
+        }
+      }
+    } catch (error) {
+      console.error('Electron dosya okuma hatası:', error)
+    }
+  }
+
+  // Web fallback: localStorage
   const storage = getStorageAdapter()
-  
   try {
     const stored = storage.getItem(STORAGE_KEY)
     if (stored) {
