@@ -15,27 +15,41 @@ export function setOnboardingDone(): void {
 }
 
 export function loadData(): FinansalVeriler {
-  // Electron: localStorage'ı bypass et, doğrudan dosyadan oku
+  // Electron: dosyadan ve localStorage'dan oku, hangisi daha doluysa onu kullan
   if (typeof window !== 'undefined' && (window as any).electronAPI?.loadData) {
+    let fileData: FinansalVeriler | null = null
+    let localData: FinansalVeriler | null = null
+
     try {
       const raw = (window as any).electronAPI.loadData()
       if (raw) {
-        const data = JSON.parse(raw)
-        return {
-          ...getDefaultData(),
-          ...data,
-          maas: data.maas || { tutar: 0, gun: 1 },
-          ek_gelirler: data.ek_gelirler || [],
-          son_maas_tarihi: data.son_maas_tarihi || null,
-          odeme_gecmisi: data.odeme_gecmisi || [],
-          hedefler: data.hedefler || [],
-          kredi_kartlari: data.kredi_kartlari || [],
-          harcamalar: data.harcamalar || [],
-        }
+        fileData = normalizeData(JSON.parse(raw))
       }
     } catch (error) {
       console.error('Electron dosya okuma hatası:', error)
     }
+
+    // localStorage'dan migrasyon için kontrol et
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        localData = normalizeData(JSON.parse(stored))
+      }
+    } catch (error) {
+      console.error('localStorage okuma hatası:', error)
+    }
+
+    // Hangisi daha fazla veri içeriyorsa onu kullan
+    if (localData && (!fileData || dataWeight(localData) > dataWeight(fileData))) {
+      // localStorage'daki veriyi dosyaya kaydet (tek seferlik migrasyon)
+      const json = JSON.stringify(localData)
+      ;(window as any).electronAPI.saveData(json).catch((err: Error) => {
+        console.error('Migrasyon dosya kaydetme hatası:', err)
+      })
+      return localData
+    }
+
+    if (fileData) return fileData
   }
 
   // Web fallback: localStorage
@@ -43,18 +57,7 @@ export function loadData(): FinansalVeriler {
   try {
     const stored = storage.getItem(STORAGE_KEY)
     if (stored) {
-      const data = JSON.parse(stored)
-      return {
-        ...getDefaultData(),
-        ...data,
-        maas: data.maas || { tutar: 0, gun: 1 },
-        ek_gelirler: data.ek_gelirler || [],
-        son_maas_tarihi: data.son_maas_tarihi || null,
-        odeme_gecmisi: data.odeme_gecmisi || [],
-        hedefler: data.hedefler || [],
-        kredi_kartlari: data.kredi_kartlari || [],
-        harcamalar: data.harcamalar || [],
-      }
+      return normalizeData(JSON.parse(stored))
     }
   } catch (error) {
     console.error('Veri yükleme hatası:', error)
@@ -136,5 +139,32 @@ function getDefaultData(): FinansalVeriler {
     kredi_kartlari: [],
     ek_gelirler: [],
   }
+}
+
+function normalizeData(data: any): FinansalVeriler {
+  return {
+    ...getDefaultData(),
+    ...data,
+    maas: data.maas || { tutar: 0, gun: 1 },
+    ek_gelirler: data.ek_gelirler || [],
+    son_maas_tarihi: data.son_maas_tarihi || null,
+    odeme_gecmisi: data.odeme_gecmisi || [],
+    hedefler: data.hedefler || [],
+    kredi_kartlari: data.kredi_kartlari || [],
+    harcamalar: data.harcamalar || [],
+  }
+}
+
+function dataWeight(data: FinansalVeriler): number {
+  return (
+    (data.borclar?.length || 0) +
+    (data.hedefler?.length || 0) +
+    (data.harcamalar?.length || 0) +
+    (data.kredi_kartlari?.length || 0) +
+    (data.ek_gelirler?.length || 0) +
+    (data.odeme_gecmisi?.length || 0) +
+    (data.nakit_bakiye > 0 ? 1 : 0) +
+    (data.maas?.tutar > 0 ? 1 : 0)
+  )
 }
 
