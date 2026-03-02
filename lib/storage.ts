@@ -96,16 +96,27 @@ export function resetData(): void {
 
 // Veri yedekleme/geri yükleme fonksiyonları
 export function exportData(): string {
+  // Electron: dosyadan oku (localStorage yetersiz olabilir)
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.loadData) {
+    const raw = (window as any).electronAPI.loadData()
+    if (raw) return raw
+  }
   const storage = getStorageAdapter()
-  const data = storage.getItem(STORAGE_KEY)
-  return data || JSON.stringify(getDefaultData())
+  return storage.getItem(STORAGE_KEY) || JSON.stringify(getDefaultData())
 }
 
 export function importData(jsonData: string): boolean {
   try {
     const data = JSON.parse(jsonData)
+    const json = JSON.stringify(data)
     const storage = getStorageAdapter()
-    storage.setItem(STORAGE_KEY, JSON.stringify(data))
+    storage.setItem(STORAGE_KEY, json)
+    // Electron: dosyaya da yaz
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.saveData) {
+      ;(window as any).electronAPI.saveData(json).catch((err: Error) => {
+        console.error('Import dosya kaydetme hatası:', err)
+      })
+    }
     return true
   } catch (error) {
     console.error('Veri içe aktarma hatası:', error)

@@ -149,7 +149,7 @@ export function KrediKartiEkleModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="💳 Kredi Kartı Ekle" size="lg">
-      <form onSubmit={handleSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-2">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           label="Kart Adı"
           value={ad}
