@@ -275,18 +275,11 @@ export function exportToPDF(veriler: FinansalVeriler) {
 
   const dosyaAdi = `finansal_rapor_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`
 
-  // Capacitor (mobil) için blob URL, masaüstü için direkt kaydet
+  // Capacitor (mobil) için data URI ile yeni sekme aç, masaüstü için direkt kaydet
   const isNative = typeof window !== 'undefined' && !!(window as any).Capacitor?.isNativePlatform?.()
   if (isNative) {
-    const blob = doc.output('blob')
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = dosyaAdi
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 2000)
+    const dataUri = doc.output('datauristring')
+    window.open(dataUri, '_blank')
   } else {
     doc.save(dosyaAdi)
   }

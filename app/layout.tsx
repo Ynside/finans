@@ -16,7 +16,9 @@ export default function RootLayout({
     <html lang="tr">
       <body>
         <Navigation />
-        {children}
+        <div className="pb-16 md:pb-0">
+          {children}
+        </div>
       </body>
     </html>
   )

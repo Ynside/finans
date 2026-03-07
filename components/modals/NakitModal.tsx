@@ -57,6 +57,7 @@ export function NakitModal({ isOpen, onClose, tip, mevcutBakiye, onSave }: Nakit
         <Input
           label={tip === 'ekle' ? 'Eklenecek Tutar (TL)' : 'Çıkarılacak Tutar (TL)'}
           type="text"
+          inputMode="decimal"
           value={tutar}
           onChange={(e) => setTutar(e.target.value)}
           placeholder="0"
