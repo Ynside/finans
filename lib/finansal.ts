@@ -22,10 +22,11 @@ export function hesaplaFinansalDurum(veriler: FinansalVeriler): FinansalDurum {
   }, 0)
 
   const bugun = new Date()
+  const bugunGun = bugun.getDate()
   const ay_basi = startOfMonth(bugun)
   const ay_sonu = endOfMonth(bugun)
 
-  const bu_ay_odeme = veriler.borclar.reduce((toplam, borc) => {
+  const borc_bu_ay = veriler.borclar.reduce((toplam, borc) => {
     return (
       toplam +
       borc.taksitler
@@ -42,7 +43,64 @@ export function hesaplaFinansalDurum(veriler: FinansalVeriler): FinansalDurum {
     )
   }, 0)
 
-  // Kredi kartı borcu
+  // Kredi kartı bu ay ödemeleri
+  const kredi_bu_ay = (veriler.kredi_kartlari || []).reduce((toplam, kk) => {
+    let kartOdeme = 0
+    const hedefStart = bugun.getFullYear() * 12 + bugun.getMonth()
+
+    // Ekstre borcu
+    if (kk.donem_borcu && kk.donem_borcu > 0) {
+      let ekstreAy = bugun.getMonth()
+      let ekstreYil = bugun.getFullYear()
+      if (bugunGun < kk.ekstre_kesim_gunu) {
+        ekstreAy -= 1
+        if (ekstreAy < 0) { ekstreAy = 11; ekstreYil -= 1 }
+      }
+      let sonOdeme = new Date(new Date(ekstreYil, ekstreAy, kk.ekstre_kesim_gunu).getTime() + kk.son_odeme_gunu * 86400000)
+      if (sonOdeme < bugun) {
+        ekstreAy += 1
+        if (ekstreAy > 11) { ekstreAy = 0; ekstreYil += 1 }
+        sonOdeme = new Date(new Date(ekstreYil, ekstreAy, kk.ekstre_kesim_gunu).getTime() + kk.son_odeme_gunu * 86400000)
+      }
+      if (isWithinInterval(sonOdeme, { start: ay_basi, end: ay_sonu })) {
+        kartOdeme += kk.donem_borcu
+      }
+    }
+
+    // Dönem içi harcama
+    if (kk.donem_ici_harcama && kk.donem_ici_harcama > 0) {
+      let ekstreAy = bugun.getMonth()
+      let ekstreYil = bugun.getFullYear()
+      if (bugunGun >= kk.ekstre_kesim_gunu) {
+        ekstreAy += 1
+        if (ekstreAy > 11) { ekstreAy = 0; ekstreYil += 1 }
+      }
+      const sonOdeme = new Date(new Date(ekstreYil, ekstreAy, kk.ekstre_kesim_gunu).getTime() + kk.son_odeme_gunu * 86400000)
+      if (isWithinInterval(sonOdeme, { start: ay_basi, end: ay_sonu })) {
+        kartOdeme += kk.donem_ici_harcama
+      }
+    }
+
+    // Taksit planları
+    if (kk.taksit_planlari) {
+      for (const tp of kk.taksit_planlari) {
+        try {
+          const [planYil, planAy] = tp.baslangic.split('-').map(Number)
+          const planStart = planYil * 12 + planAy - 1
+          const idx = hedefStart - planStart
+          if (idx >= 0 && idx < tp.kalan_taksit) {
+            kartOdeme += tp.aylik_odemeler?.[idx] ?? tp.aylik_tutar
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
+    return toplam + kartOdeme
+  }, 0)
+
+  const bu_ay_odeme = borc_bu_ay + kredi_bu_ay
+
+  // Kredi kartı toplam borcu
   const kredi_karti_borcu = (veriler.kredi_kartlari || []).reduce(
     (toplam, kk) => toplam + (kk.bakiye || 0),
     0
@@ -94,7 +152,36 @@ export function bildirimleriOlustur(veriler: FinansalVeriler): Bildirim[] {
   if (yaklasan > 0) {
     bildirimler.push({
       tip: 'warning',
-      mesaj: `📌 7 gün içinde ${formatPara(yaklasan)} ödeme var.`,
+      mesaj: `📌 7 gün içinde ${formatPara(yaklasan)} borç ödemesi var.`,
+    })
+  }
+
+  // 7 gün içinde kredi kartı ödemeleri
+  const bugunGun = bugun.getDate()
+  let krediYaklasan = 0
+  for (const kk of (veriler.kredi_kartlari || [])) {
+    if (kk.donem_borcu && kk.donem_borcu > 0) {
+      let ekstreAy = bugun.getMonth()
+      let ekstreYil = bugun.getFullYear()
+      if (bugunGun < kk.ekstre_kesim_gunu) {
+        ekstreAy -= 1
+        if (ekstreAy < 0) { ekstreAy = 11; ekstreYil -= 1 }
+      }
+      let sonOdeme = new Date(new Date(ekstreYil, ekstreAy, kk.ekstre_kesim_gunu).getTime() + kk.son_odeme_gunu * 86400000)
+      if (sonOdeme < bugun) {
+        ekstreAy += 1
+        if (ekstreAy > 11) { ekstreAy = 0; ekstreYil += 1 }
+        sonOdeme = new Date(new Date(ekstreYil, ekstreAy, kk.ekstre_kesim_gunu).getTime() + kk.son_odeme_gunu * 86400000)
+      }
+      if (sonOdeme >= bugun && sonOdeme <= limit) {
+        krediYaklasan += kk.donem_borcu
+      }
+    }
+  }
+  if (krediYaklasan > 0) {
+    bildirimler.push({
+      tip: 'warning',
+      mesaj: `💳 7 gün içinde ${formatPara(krediYaklasan)} kredi kartı ekstre ödemesi var.`,
     })
   }
 
@@ -247,42 +334,104 @@ export function projeksiyonHesapla(
       }
     }
 
-    // Kredi kartı ödemeleri - ekstre kesim gününe göre
-    // Önceki ayın bakiyesini bu ay ödenir
-    const krediKartiOdeme = (veriler.kredi_kartlari || []).reduce((toplam, kk) => {
-      // Ekstre kesim günü bu ay içindeyse, önceki ayın bakiyesini öde
-      if (hedef_tarih.getDate() >= kk.ekstre_kesim_gunu) {
-        // Önceki ay için kredi kartı harcamalarını hesapla
-        const oncekiAy = addMonths(hedef_tarih, -1)
-        const oncekiAyBasi = startOfMonth(oncekiAy)
-        const oncekiAySonu = endOfMonth(oncekiAy)
-        
-        const oncekiAyHarcamalar = (veriler.harcamalar || []).filter((h) => {
-          try {
-            const [gun, ay, yil] = h.tarih.split('.')
-            const harcamaTarihi = new Date(parseInt(yil), parseInt(ay) - 1, parseInt(gun))
-            return (
-              isWithinInterval(harcamaTarihi, { start: oncekiAyBasi, end: oncekiAySonu }) &&
-              h.tip === 'kredi_karti' &&
-              h.kredi_karti_id === kk.id
-            )
-          } catch {
-            return false
-          }
-        })
-        
-        const oncekiAyToplam = oncekiAyHarcamalar.reduce((sum, h) => sum + h.tutar, 0)
-        return toplam + Math.max(0, oncekiAyToplam)
-      }
+    // Kredi kartı dönem borcu - bir sonraki son ödeme tarihinde tek seferlik ödenir
+    const donemBorcuOdeme = (veriler.kredi_kartlari || []).reduce((toplam, kk) => {
+      if (!kk.donem_borcu || kk.donem_borcu <= 0) return toplam
+      try {
+        const bugunGun = bugun.getDate()
+        let ekstreAy = bugun.getMonth()
+        let ekstreYil = bugun.getFullYear()
+        if (bugunGun < kk.ekstre_kesim_gunu) {
+          ekstreAy -= 1
+          if (ekstreAy < 0) { ekstreAy = 11; ekstreYil -= 1 }
+        }
+        let odemeTarihi = new Date(new Date(ekstreYil, ekstreAy, kk.ekstre_kesim_gunu).getTime() + kk.son_odeme_gunu * 24 * 60 * 60 * 1000)
+        if (odemeTarihi < bugun) {
+          ekstreAy += 1
+          if (ekstreAy > 11) { ekstreAy = 0; ekstreYil += 1 }
+          odemeTarihi = new Date(new Date(ekstreYil, ekstreAy, kk.ekstre_kesim_gunu).getTime() + kk.son_odeme_gunu * 24 * 60 * 60 * 1000)
+        }
+        if (isWithinInterval(odemeTarihi, { start: ay_basi, end: ay_sonu })) {
+          return toplam + kk.donem_borcu
+        }
+      } catch { /* ignore */ }
       return toplam
+    }, 0)
+
+    // Kredi kartı dönem içi harcama ödemeleri - mevcut dönem ekstresinde ödenir
+    const donemIciOdeme = (veriler.kredi_kartlari || []).reduce((toplam, kk) => {
+      if (!kk.donem_ici_harcama || kk.donem_ici_harcama <= 0) return toplam
+      try {
+        const bugunGun = bugun.getDate()
+        let ekstreAy = bugun.getMonth()
+        let ekstreYil = bugun.getFullYear()
+        if (bugunGun >= kk.ekstre_kesim_gunu) {
+          // Ekstre bu ay kesildi, dönem içi sonraki ay ödenecek
+          ekstreAy += 1
+          if (ekstreAy > 11) { ekstreAy = 0; ekstreYil += 1 }
+        }
+        const ekstreTarihi = new Date(ekstreYil, ekstreAy, kk.ekstre_kesim_gunu)
+        const odemeTarihi = new Date(ekstreTarihi.getTime() + kk.son_odeme_gunu * 24 * 60 * 60 * 1000)
+        if (isWithinInterval(odemeTarihi, { start: ay_basi, end: ay_sonu })) {
+          return toplam + kk.donem_ici_harcama
+        }
+      } catch { /* ignore */ }
+      return toplam
+    }, 0)
+
+    // Kredi kartı taksit ödemeleri
+    const krediKartiTaksitOdeme = (veriler.kredi_kartlari || []).reduce((toplam, kk) => {
+      const hedefStart = hedef_tarih.getFullYear() * 12 + hedef_tarih.getMonth()
+
+      // YENİ FORMAT: taksit_planlari varsa (boş array dahil) kullan
+      if (kk.taksit_planlari !== undefined) {
+        for (const tp of kk.taksit_planlari) {
+          try {
+            const [planYil, planAy] = tp.baslangic.split('-').map(Number)
+            const planStart = planYil * 12 + planAy - 1
+            const idx = hedefStart - planStart
+            if (idx >= 0 && idx < tp.kalan_taksit) {
+              toplam += tp.aylik_odemeler?.[idx] ?? tp.aylik_tutar
+            }
+          } catch { /* ignore */ }
+        }
+        return toplam
+      }
+
+      // ESKİ FORMAT: odeme_plani (backward compat)
+      if (kk.odeme_plani) {
+        try {
+          const [planYil, planAy] = kk.odeme_plani.baslangic.split('-').map(Number)
+          const planStart = planYil * 12 + planAy - 1
+          const idx = hedefStart - planStart
+          if (idx >= 0 && idx < kk.odeme_plani.aylar.length) {
+            return toplam + kk.odeme_plani.aylar[idx]
+          }
+        } catch { /* ignore */ }
+        return toplam
+      }
+
+      // Çok eski format: KrediKartiTaksit[]
+      return toplam + (kk.taksitler || []).reduce((sum, taksit) => {
+        try {
+          const [gun, ay, yil] = taksit.sonraki_taksit_tarihi.split('.')
+          const ilkOdeme = new Date(parseInt(yil), parseInt(ay) - 1, parseInt(gun))
+          for (let i = 0; i < taksit.kalan_taksit; i++) {
+            const odemeTarihi = addMonths(ilkOdeme, i)
+            if (isWithinInterval(odemeTarihi, { start: ay_basi, end: ay_sonu })) {
+              return sum + (taksit.aylik_odemeler?.[i] ?? taksit.aylik_tutar)
+            }
+          }
+        } catch { /* ignore */ }
+        return sum
+      }, 0)
     }, 0)
 
     // Bu ay için: gerçek harcamalar, gelecek aylar için: ortalama
     const harcamaTutari =
       ay_offset === 0 ? buAyHarcamaToplam : ortalamaAylikHarcama
 
-    // Kredi kartı ödemeleri sadece gelecek aylar için hesaplanır (bu ay için henüz ekstre kesilmedi)
-    const gider = borcGider + harcamaTutari + (ay_offset > 0 ? krediKartiOdeme : 0)
+    const gider = borcGider + harcamaTutari + krediKartiTaksitOdeme + donemBorcuOdeme + donemIciOdeme
 
     let kredi_taksit = 0
     if (ekKredi) {
@@ -387,6 +536,105 @@ export function yaklasanOdemeleriGetir(veriler: FinansalVeriler, gunSayisi: numb
           }
         } catch {
           // ignore
+        }
+      }
+    }
+  }
+
+  // Kredi kartı ödemeleri
+  for (const kk of (veriler.kredi_kartlari || [])) {
+    const bugunGun = bugun.getDate()
+
+    // 1. Ekstre borcu — son ödeme tarihi
+    if (kk.donem_borcu && kk.donem_borcu > 0) {
+      let ekstreAy = bugun.getMonth()
+      let ekstreYil = bugun.getFullYear()
+      if (bugunGun < kk.ekstre_kesim_gunu) {
+        ekstreAy -= 1
+        if (ekstreAy < 0) { ekstreAy = 11; ekstreYil -= 1 }
+      }
+      let sonOdeme = new Date(new Date(ekstreYil, ekstreAy, kk.ekstre_kesim_gunu).getTime() + kk.son_odeme_gunu * 86400000)
+      // Son ödeme geçtiyse bir dönem ileri al (roll over)
+      if (sonOdeme < bugun) {
+        ekstreAy += 1
+        if (ekstreAy > 11) { ekstreAy = 0; ekstreYil += 1 }
+        sonOdeme = new Date(new Date(ekstreYil, ekstreAy, kk.ekstre_kesim_gunu).getTime() + kk.son_odeme_gunu * 86400000)
+      }
+      if (sonOdeme >= bugun && sonOdeme <= limit) {
+        odemeler.push({
+          odeme_tipi: 'kredi_karti',
+          aciklama: `${kk.ad} — Ekstre Borcu`,
+          kredi_karti_detay: 'Kilitli ekstre borcu',
+          tutar: kk.donem_borcu,
+          vade: sonOdeme,
+          vade_str: format(sonOdeme, 'dd.MM.yyyy'),
+          fark: differenceInDays(sonOdeme, bugun),
+          kredi_karti: kk,
+        })
+      }
+    }
+
+    // 2. Dönem içi harcama
+    if (kk.donem_ici_harcama && kk.donem_ici_harcama > 0) {
+      let ekstreAy = bugun.getMonth()
+      let ekstreYil = bugun.getFullYear()
+      if (bugunGun >= kk.ekstre_kesim_gunu) {
+        ekstreAy += 1
+        if (ekstreAy > 11) { ekstreAy = 0; ekstreYil += 1 }
+      }
+      const ekstreTarihi = new Date(ekstreYil, ekstreAy, kk.ekstre_kesim_gunu)
+      const sonOdeme = new Date(ekstreTarihi.getTime() + kk.son_odeme_gunu * 86400000)
+      if (sonOdeme >= bugun && sonOdeme <= limit) {
+        odemeler.push({
+          odeme_tipi: 'kredi_karti',
+          aciklama: `${kk.ad} — Dönem İçi Harcama`,
+          kredi_karti_detay: 'Bu dönem yapılan harcamalar',
+          tutar: kk.donem_ici_harcama,
+          vade: sonOdeme,
+          vade_str: format(sonOdeme, 'dd.MM.yyyy'),
+          fark: differenceInDays(sonOdeme, bugun),
+          kredi_karti: kk,
+        })
+      }
+    }
+
+    // 3. Taksit planları — önümüzdeki 3 ay
+    if (kk.taksit_planlari && kk.taksit_planlari.length > 0) {
+      for (let offset = 0; offset <= 3; offset++) {
+        const checkDate = addMonths(startOfMonth(bugun), offset)
+        const hedefStart = checkDate.getFullYear() * 12 + checkDate.getMonth()
+
+        let monthTotal = 0
+        const monthDetails: string[] = []
+
+        for (const tp of kk.taksit_planlari) {
+          try {
+            const [planYil, planAy] = tp.baslangic.split('-').map(Number)
+            const planStart = planYil * 12 + planAy - 1
+            const idx = hedefStart - planStart
+            if (idx >= 0 && idx < tp.kalan_taksit) {
+              const tutar = tp.aylik_odemeler?.[idx] ?? tp.aylik_tutar
+              monthTotal += tutar
+              monthDetails.push(tp.aciklama)
+            }
+          } catch { /* ignore */ }
+        }
+
+        if (monthTotal > 0) {
+          const ekstreTarihi = new Date(checkDate.getFullYear(), checkDate.getMonth(), kk.ekstre_kesim_gunu)
+          const sonOdeme = new Date(ekstreTarihi.getTime() + kk.son_odeme_gunu * 86400000)
+          if (sonOdeme >= bugun && sonOdeme <= limit) {
+            odemeler.push({
+              odeme_tipi: 'kredi_karti',
+              aciklama: `${kk.ad} — Taksit Ödemeleri`,
+              kredi_karti_detay: monthDetails.join(', '),
+              tutar: monthTotal,
+              vade: sonOdeme,
+              vade_str: format(sonOdeme, 'dd.MM.yyyy'),
+              fark: differenceInDays(sonOdeme, bugun),
+              kredi_karti: kk,
+            })
+          }
         }
       }
     }

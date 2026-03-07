@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Wallet, TrendingUp, Calendar, Plus, ArrowUpRight, ArrowDownRight, CreditCard, DollarSign, FileText } from 'lucide-react'
 import { loadData, saveData, isOnboardingDone, setOnboardingDone } from '@/lib/storage'
+import { hesaplaBakiye } from '@/lib/kredi-utils'
 import { OnboardingWizard } from '@/components/OnboardingWizard'
 import { hesaplaFinansalDurum, bildirimleriOlustur, yaklasanOdemeleriGetir, maasKontrolEt, ekGelirKontrolEt } from '@/lib/finansal'
 import { formatPara } from '@/lib/utils'
@@ -124,6 +125,38 @@ export default function DashboardPage() {
     saveData(yeniVeriler)
     setVeriler(yeniVeriler)
     setNakitModalOpen(false)
+  }
+
+  const handleHarcamaSil = (id: number) => {
+    const harcama = veriler.harcamalar?.find((h) => h.id === id)
+    if (!harcama) return
+
+    let yeniVeriler: FinansalVeriler = {
+      ...veriler,
+      harcamalar: veriler.harcamalar?.filter((h) => h.id !== id),
+    }
+
+    if (harcama.tip === 'nakit') {
+      yeniVeriler.nakit_bakiye = veriler.nakit_bakiye + harcama.tutar
+    } else if (harcama.tip === 'kredi_karti' && harcama.kredi_karti_id) {
+      yeniVeriler.kredi_kartlari = veriler.kredi_kartlari?.map((kk) => {
+        if (kk.id !== harcama.kredi_karti_id) return kk
+        let guncelKart = { ...kk }
+        if (harcama.taksitlendirme) {
+          // Taksitli: taksit_planlari'ndan harcama_id eşleşeni çıkar
+          guncelKart.taksit_planlari = (kk.taksit_planlari || []).filter(
+            (tp) => tp.harcama_id !== harcama.id
+          )
+        } else {
+          // Taksitsiz: dönem içi harcamadan düş
+          guncelKart.donem_ici_harcama = Math.max(0, (kk.donem_ici_harcama || 0) - harcama.tutar)
+        }
+        return { ...guncelKart, bakiye: hesaplaBakiye(guncelKart) }
+      })
+    }
+
+    saveData(yeniVeriler)
+    setVeriler(yeniVeriler)
   }
 
   const handlePdfExport = () => {
@@ -350,7 +383,7 @@ export default function DashboardPage() {
               <div className="text-[10px] sm:text-xs text-white/60">Bu ay sonrası</div>
             </Card>
 
-            <RecentTransactions veriler={veriler} />
+            <RecentTransactions veriler={veriler} onHarcamaSil={handleHarcamaSil} />
           </div>
         </div>
       </div>

@@ -35,29 +35,31 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in p-3 sm:p-4"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
-      <div
-        className={cn(
-          'glass-strong rounded-xl sm:rounded-2xl shadow-premium w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden animate-scale-in',
-          sizes[size]
-        )}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sticky top-0 glass-strong border-b border-white/10 px-4 sm:px-6 py-3 sm:py-4 md:py-5 flex items-center justify-between backdrop-blur-xl">
-          <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate flex-1 mr-2">
-            {title}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1.5 sm:p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
-            aria-label="Kapat"
-          >
-            <X size={18} className="sm:w-5 sm:h-5" />
-          </button>
+      <div className="flex min-h-full items-center justify-center p-3 sm:p-4">
+        <div
+          className={cn(
+            'glass-strong rounded-xl sm:rounded-2xl shadow-premium w-full animate-scale-in',
+            sizes[size]
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="border-b border-white/10 px-4 sm:px-6 py-3 sm:py-4 md:py-5 flex items-center justify-between">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate flex-1 mr-2">
+              {title}
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-1.5 sm:p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+              aria-label="Kapat"
+            >
+              <X size={18} className="sm:w-5 sm:h-5" />
+            </button>
+          </div>
+          <div className="p-4 sm:p-5 md:p-6">{children}</div>
         </div>
-        <div className="p-4 sm:p-5 md:p-6 overflow-y-auto max-h-[calc(95vh-60px)] sm:max-h-[calc(90vh-80px)]">{children}</div>
       </div>
     </div>
   )

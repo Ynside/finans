@@ -1,16 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CreditCard, Plus, Trash2, DollarSign, Settings, Wallet, Download, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, DollarSign, Wallet, Download, AlertTriangle } from 'lucide-react'
 import { loadData, saveData, resetData } from '@/lib/storage'
 import { formatPara, parseTutar } from '@/lib/utils'
 import { maasKontrolEt, ekGelirKontrolEt } from '@/lib/finansal'
-import type { FinansalVeriler, EkGelir, KrediKarti } from '@/types'
+import type { FinansalVeriler, EkGelir } from '@/types'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { KrediKartiEkleModal } from '@/components/modals/KrediKartiEkleModal'
-import { KrediKartiOdemeModal } from '@/components/modals/KrediKartiOdemeModal'
 import { YedeklemeModal } from '@/components/modals/YedeklemeModal'
 import { Modal } from '@/components/ui/Modal'
 import { format } from 'date-fns'
@@ -19,11 +17,8 @@ export default function AyarlarPage() {
   const [veriler, setVeriler] = useState<FinansalVeriler | null>(null)
   const [maasTutar, setMaasTutar] = useState('')
   const [maasGun, setMaasGun] = useState('1')
-  const [krediKartiModalOpen, setKrediKartiModalOpen] = useState(false)
   const [ekGelirModalOpen, setEkGelirModalOpen] = useState(false)
-  const [odemeModalOpen, setOdemeModalOpen] = useState(false)
   const [yedeklemeModalOpen, setYedeklemeModalOpen] = useState(false)
-  const [seciliKrediKarti, setSeciliKrediKarti] = useState<KrediKarti | null>(null)
   const [sifirlama, setSifirlama] = useState<'idle' | 'countdown' | 'confirm'>('idle')
   const [geriSayim, setGeriSayim] = useState(5)
 
@@ -63,18 +58,6 @@ export default function AyarlarPage() {
 
     saveData(kontrolVeriler)
     setVeriler(kontrolVeriler)
-  }
-
-  const handleKrediKartiDelete = (id: number) => {
-    if (!confirm('Bu kredi kartını silmek istediğinize emin misiniz? Tüm harcamaları da silinecektir.')) return
-    
-    const yeniVeriler: FinansalVeriler = {
-      ...veriler!,
-      kredi_kartlari: veriler!.kredi_kartlari?.filter((kk) => kk.id !== id) || [],
-      harcamalar: veriler!.harcamalar?.filter((h) => !(h.tip === 'kredi_karti' && h.kredi_karti_id === id)) || [],
-    }
-    saveData(yeniVeriler)
-    setVeriler(yeniVeriler)
   }
 
   const handleSifirlaBaslat = () => {
@@ -234,85 +217,6 @@ export default function AyarlarPage() {
             )}
           </Card>
 
-          {/* Kredi Kartları */}
-          <Card className="premium-card lg:col-span-2 p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-warning/20">
-                  <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-warning" />
-                </div>
-                <div>
-                  <h2 className="text-base sm:text-lg font-bold text-white">Kredi Kartları</h2>
-                  <p className="text-[10px] sm:text-xs text-white/60">Kredi kartı bilgilerinizi yönetin</p>
-                </div>
-              </div>
-              <Button onClick={() => setKrediKartiModalOpen(true)} variant="primary" size="sm" className="text-xs sm:text-sm w-full sm:w-auto">
-                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
-                Kart Ekle
-              </Button>
-            </div>
-
-            {veriler.kredi_kartlari && veriler.kredi_kartlari.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                {veriler.kredi_kartlari.map((kk) => (
-                  <div key={kk.id} className="glass rounded-lg p-3 sm:p-4 border border-white/10">
-                    <div className="flex items-start justify-between mb-2 sm:mb-3 gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm sm:text-base font-bold text-white mb-1 truncate">{kk.ad}</p>
-                        <div className="space-y-0.5 sm:space-y-1 text-[10px] sm:text-xs text-white/60">
-                          <p>Ekstre: {kk.ekstre_kesim_gunu}. gün</p>
-                          <p>Ödeme: {kk.son_odeme_gunu} gün sonra</p>
-                          {kk.limit && (
-                            <p>Limit: {formatPara(kk.limit)}</p>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        onClick={() => handleKrediKartiDelete(kk.id)}
-                        variant="ghost"
-                        size="sm"
-                        className="ml-2 flex-shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    {kk.bakiye > 0 && (
-                      <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-white/10">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2">
-                          <p className="text-xs sm:text-sm text-warning font-semibold">
-                            ⚠️ Ödenmemiş: {formatPara(kk.bakiye)}
-                          </p>
-                          <Button
-                            onClick={() => {
-                              setSeciliKrediKarti(kk)
-                              setOdemeModalOpen(true)
-                            }}
-                            variant="success"
-                            size="sm"
-                            className="w-full sm:w-auto text-xs sm:text-sm"
-                          >
-                            💰 Öde
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 sm:py-12">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-white/5 mx-auto mb-3 sm:mb-4 flex items-center justify-center">
-                  <CreditCard className="w-6 h-6 sm:w-8 sm:h-8 text-white/20" />
-                </div>
-                <p className="text-white/60 text-xs sm:text-sm mb-2">Henüz kredi kartı eklenmemiş</p>
-                <Button onClick={() => setKrediKartiModalOpen(true)} variant="primary" size="sm" className="text-xs sm:text-sm">
-                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
-                  İlk Kartınızı Ekleyin
-                </Button>
-              </div>
-            )}
-          </Card>
-
           {/* Veri Yedekleme */}
           <Card className="premium-card lg:col-span-2 p-4 sm:p-6">
             <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
@@ -412,17 +316,6 @@ export default function AyarlarPage() {
         onClose={() => setYedeklemeModalOpen(false)}
       />
 
-      <KrediKartiEkleModal
-        isOpen={krediKartiModalOpen}
-        onClose={() => setKrediKartiModalOpen(false)}
-        veriler={veriler}
-        onSave={(yeniVeriler) => {
-          saveData(yeniVeriler)
-          setVeriler(yeniVeriler)
-          setKrediKartiModalOpen(false)
-        }}
-      />
-
       <EkGelirEkleModal
         isOpen={ekGelirModalOpen}
         onClose={() => setEkGelirModalOpen(false)}
@@ -434,23 +327,6 @@ export default function AyarlarPage() {
         }}
       />
 
-      {seciliKrediKarti && (
-        <KrediKartiOdemeModal
-          isOpen={odemeModalOpen}
-          onClose={() => {
-            setOdemeModalOpen(false)
-            setSeciliKrediKarti(null)
-          }}
-          krediKarti={seciliKrediKarti}
-          veriler={veriler}
-          onSave={(yeniVeriler) => {
-            saveData(yeniVeriler)
-            setVeriler(yeniVeriler)
-            setOdemeModalOpen(false)
-            setSeciliKrediKarti(null)
-          }}
-        />
-      )}
     </div>
   )
 }
