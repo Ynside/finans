@@ -5,6 +5,21 @@ import { formatPara } from './utils'
 import { hesaplaFinansalDurum, projeksiyonHesapla } from './finansal'
 import { format, parse, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns'
 
+// jsPDF standart fontlar Unicode desteklemez, Türkçe karakterleri ASCII'ye dönüştür
+function n(text: string): string {
+  return String(text)
+    .replace(/ş/g, 's').replace(/Ş/g, 'S')
+    .replace(/ğ/g, 'g').replace(/Ğ/g, 'G')
+    .replace(/ü/g, 'u').replace(/Ü/g, 'U')
+    .replace(/ö/g, 'o').replace(/Ö/g, 'O')
+    .replace(/ç/g, 'c').replace(/Ç/g, 'C')
+    .replace(/ı/g, 'i').replace(/İ/g, 'I')
+}
+
+function n2(rows: string[][]): string[][] {
+  return rows.map(row => row.map(cell => n(cell)))
+}
+
 export function exportToPDF(veriler: FinansalVeriler) {
   const doc = new jsPDF('p', 'mm', 'a4')
   const margin = 15
@@ -16,13 +31,13 @@ export function exportToPDF(veriler: FinansalVeriler) {
   doc.setFontSize(20)
   doc.setTextColor(99, 102, 241)
   doc.setFont('helvetica', 'bold')
-  doc.text('Finansal Rapor', margin, y)
+  doc.text(n('Finansal Rapor'), margin, y)
   y += 8
 
   doc.setFontSize(10)
   doc.setTextColor(100, 100, 100)
   doc.setFont('helvetica', 'normal')
-  doc.text(`Tarih: ${format(new Date(), 'dd.MM.yyyy HH:mm')}`, margin, y)
+  doc.text(n(`Tarih: ${format(new Date(), 'dd.MM.yyyy HH:mm')}`), margin, y)
   y += 15
 
   const addPageIfNeeded = () => {
@@ -37,18 +52,18 @@ export function exportToPDF(veriler: FinansalVeriler) {
   doc.setFontSize(14)
   doc.setTextColor(0, 0, 0)
   doc.setFont('helvetica', 'bold')
-  doc.text('Genel Finansal Durum', margin, y)
+  doc.text(n('Genel Finansal Durum'), margin, y)
   y += 8
 
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
-  const durumData = [
+  const durumData = n2([
     ['Nakit Bakiye', formatPara(durum.nakit)],
-    ['Toplam Borç', formatPara(durum.toplam_borc)],
+    ['Toplam Borc', formatPara(durum.toplam_borc)],
     ['Net Durum', formatPara(durum.net)],
-    ['Bu Ay Ödeme', formatPara(durum.bu_ay_odeme)],
+    ['Bu Ay Odeme', formatPara(durum.bu_ay_odeme)],
     ['Kalan Bakiye', formatPara(durum.kalan)],
-  ]
+  ])
 
   ;(doc as any).autoTable({
     startY: y,
@@ -81,7 +96,7 @@ export function exportToPDF(veriler: FinansalVeriler) {
   if (buAyHarcamalar.length > 0) {
     doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
-    doc.text('Bu Ayki Harcamalar', margin, y)
+    doc.text(n('Bu Ayki Harcamalar'), margin, y)
     y += 8
 
     const nakitHarcamalar = buAyHarcamalar.filter((h) => h.tip === 'nakit')
@@ -98,11 +113,11 @@ export function exportToPDF(veriler: FinansalVeriler) {
     })
 
     // Özet
-    const ozetData = [
+    const ozetData = n2([
       ['Nakit Harcamalar', formatPara(nakitToplam)],
-      ['Kredi Kartı Harcamalar', formatPara(krediToplam)],
+      ['Kredi Karti Harcamalar', formatPara(krediToplam)],
       ['Toplam Harcama', formatPara(nakitToplam + krediToplam)],
-    ]
+    ])
 
     ;(doc as any).autoTable({
       startY: y,
@@ -120,12 +135,12 @@ export function exportToPDF(veriler: FinansalVeriler) {
     if (Object.keys(kategoriToplamlari).length > 0) {
       doc.setFontSize(12)
       doc.setFont('helvetica', 'bold')
-      doc.text('Kategori Bazlı Harcamalar', margin, y)
+      doc.text(n('Kategori Bazli Harcamalar'), margin, y)
       y += 8
 
-      const kategoriData = Object.entries(kategoriToplamlari)
+      const kategoriData = n2(Object.entries(kategoriToplamlari)
         .sort(([, a], [, b]) => b - a)
-        .map(([kategori, tutar]) => [kategori, formatPara(tutar)])
+        .map(([kategori, tutar]) => [kategori, formatPara(tutar)]))
 
       ;(doc as any).autoTable({
         startY: y,
@@ -144,10 +159,10 @@ export function exportToPDF(veriler: FinansalVeriler) {
     // Detaylı harcamalar
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
-    doc.text('Detaylı Harcama Listesi', margin, y)
+    doc.text(n('Detayli Harcama Listesi'), margin, y)
     y += 8
 
-    const harcamaData = buAyHarcamalar
+    const harcamaData = n2(buAyHarcamalar
       .sort((a, b) => {
         try {
           const tarihA = parse(a.tarih, 'dd.MM.yyyy', new Date())
@@ -159,15 +174,15 @@ export function exportToPDF(veriler: FinansalVeriler) {
       })
       .map((h) => [
         h.tarih,
-        h.aciklama || `${h.kategori || 'Diğer'} Harcaması`,
-        h.kategori || 'Diğer',
-        h.tip === 'nakit' ? 'Nakit' : 'Kredi Kartı',
+        h.aciklama || `${h.kategori || 'Diger'} Harcamasi`,
+        h.kategori || 'Diger',
+        h.tip === 'nakit' ? 'Nakit' : 'Kredi Karti',
         formatPara(h.tutar),
-      ])
+      ]))
 
     ;(doc as any).autoTable({
       startY: y,
-      head: [['Tarih', 'Açıklama', 'Kategori', 'Tip', 'Tutar']],
+      head: [['Tarih', 'Aciklama', 'Kategori', 'Tip', 'Tutar']],
       body: harcamaData,
       margin: { left: margin, right: margin },
       styles: { fontSize: 8, cellPadding: 2 },
@@ -186,10 +201,10 @@ export function exportToPDF(veriler: FinansalVeriler) {
   if (veriler.borclar.length > 0) {
     doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
-    doc.text('Borçlar Özeti', margin, y)
+    doc.text(n('Borclar Ozeti'), margin, y)
     y += 8
 
-    const borcData = veriler.borclar.map((borc) => {
+    const borcData = n2(veriler.borclar.map((borc) => {
       const kalanTutar = borc.taksitler
         .filter((t) => !t.odendi)
         .reduce((sum, t) => sum + t.tutar, 0)
@@ -203,11 +218,11 @@ export function exportToPDF(veriler: FinansalVeriler) {
         formatPara(kalanTutar),
         `${borc.taksitler.filter((t) => !t.odendi).length}/${borc.taksitler.length}`,
       ]
-    })
+    }))
 
     ;(doc as any).autoTable({
       startY: y,
-      head: [['Açıklama', 'Toplam', 'Ödenen', 'Kalan', 'Taksit']],
+      head: [['Aciklama', 'Toplam', 'Odenen', 'Kalan', 'Taksit']],
       body: borcData,
       margin: { left: margin, right: margin },
       styles: { fontSize: 9, cellPadding: 3 },
@@ -228,21 +243,21 @@ export function exportToPDF(veriler: FinansalVeriler) {
   const projeksiyon = projeksiyonHesapla(veriler)
   doc.setFontSize(14)
   doc.setFont('helvetica', 'bold')
-  doc.text('12 Aylık Projeksiyon', margin, y)
+  doc.text(n('12 Aylik Projeksiyon'), margin, y)
   y += 8
 
-  const projData = projeksiyon.map((p) => [
+  const projData = n2(projeksiyon.map((p) => [
     p.ay,
     formatPara(p.baslangic),
     formatPara(p.gelir),
     formatPara(p.gider),
     formatPara(p.net_fark),
     formatPara(p.bitis),
-  ])
+  ]))
 
   ;(doc as any).autoTable({
     startY: y,
-    head: [['Ay', 'Başlangıç', 'Gelir', 'Gider', 'Net Fark', 'Bitiş']],
+    head: [['Ay', 'Baslangic', 'Gelir', 'Gider', 'Net Fark', 'Bitis']],
     body: projData,
     margin: { left: margin, right: margin },
     styles: { fontSize: 8, cellPadding: 2 },
@@ -258,7 +273,21 @@ export function exportToPDF(veriler: FinansalVeriler) {
     },
   })
 
-  // Dosyayı kaydet
   const dosyaAdi = `finansal_rapor_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`
-  doc.save(dosyaAdi)
+
+  // Capacitor (mobil) için blob URL, masaüstü için direkt kaydet
+  const isNative = typeof window !== 'undefined' && !!(window as any).Capacitor?.isNativePlatform?.()
+  if (isNative) {
+    const blob = doc.output('blob')
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = dosyaAdi
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+  } else {
+    doc.save(dosyaAdi)
+  }
 }

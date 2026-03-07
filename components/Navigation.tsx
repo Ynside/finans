@@ -21,7 +21,10 @@ export function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
-    <nav className="glass-strong border-b border-white/10 sticky top-0 z-50 backdrop-blur-xl">
+    <nav
+      className="glass-strong border-b border-white/10 sticky top-0 z-50 backdrop-blur-xl"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6">
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center gap-2 py-3 md:py-4">
@@ -57,8 +60,9 @@ export function Navigation() {
               <span>Dashboard</span>
             </Link>
             <button
+              type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg text-white hover:bg-white/10 transition-colors"
+              className="p-3 rounded-lg text-white hover:bg-white/10 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Menu"
             >
               {mobileMenuOpen ? (
