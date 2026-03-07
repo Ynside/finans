@@ -24,18 +24,6 @@ export interface OdemeGecmisi {
   tarih: string;
 }
 
-export interface FinansalVeriler {
-  nakit_bakiye: number;
-  borclar: Borc[];
-  maas: Maaş;
-  son_maas_tarihi: string | null; // YYYY-MM formatında
-  odeme_gecmisi: OdemeGecmisi[];
-  hedefler?: BudgetGoal[];
-  harcamalar?: Harcama[];
-  kredi_kartlari?: KrediKarti[];
-  ek_gelirler?: EkGelir[];
-}
-
 export interface FinansalDurum {
   nakit: number;
   toplam_borc: number;
@@ -67,14 +55,19 @@ export interface KrediHesaplama {
 }
 
 export interface YaklasanOdeme {
+  odeme_tipi?: 'borc' | 'kredi_karti';
   aciklama: string;
   tutar: number;
   vade: Date;
   vade_str: string;
   fark: number; // gün cinsinden
-  borc: Borc;
-  taksit: Taksit;
-  taksit_index: number;
+  // Borç ödemeleri için
+  borc?: Borc;
+  taksit?: Taksit;
+  taksit_index?: number;
+  // Kredi kartı ödemeleri için
+  kredi_karti?: KrediKarti;
+  kredi_karti_detay?: string;
 }
 
 export interface BudgetGoal {
@@ -83,6 +76,11 @@ export interface BudgetGoal {
   target: number;
   current: number;
   deadline: string;
+}
+
+export interface OdemePlani {
+  baslangic: string // "YYYY-MM"
+  aylar: number[]   // Aylık ödeme tutarları
 }
 
 export interface Harcama {
@@ -109,6 +107,20 @@ export interface KrediKartiTaksit {
   toplam_taksit: number;
   baslangic_tarihi: string; // DD.MM.YYYY
   sonraki_taksit_tarihi: string; // DD.MM.YYYY
+  aylik_odemeler?: number[]; // Her ay için özel tutar (uzunluk = kalan_taksit)
+  harcama_id?: number; // HarcamaEkleModal tarafından eklendiyse kaynak harcama id'si
+}
+
+export interface TaksitPlani {
+  id: number;
+  aciklama: string;           // "Samsung TV"
+  toplam_tutar: number;       // 10000
+  toplam_taksit: number;      // 12
+  kalan_taksit: number;       // 9
+  baslangic: string;          // "2026-04" — ilk kalan taksit ayı (YYYY-MM)
+  aylik_tutar: number;        // 833 (genellikle toplam_tutar / toplam_taksit)
+  aylik_odemeler?: number[];  // Özel plan (length = kalan_taksit)
+  harcama_id?: number;        // HarcamaEkleModal'dan eklendiyse kaynak harcama id'si
 }
 
 export interface KrediKarti {
@@ -117,10 +129,14 @@ export interface KrediKarti {
   ekstre_kesim_gunu: number; // 1-31
   son_odeme_gunu: number; // Ekstre kesiminden kaç gün sonra
   limit?: number;
-  bakiye: number; // Ödenmemiş tutar
+  bakiye: number; // Ödenmemiş toplam tutar (hesaplaBakiye() ile otomatik)
+  donem_borcu?: number; // Kilitli ekstre borcu (bir sonraki son ödeme tarihinde ödenecek)
+  donem_ici_harcama?: number; // Bu dönem yapılan harcamalar (henüz ekstrede yok)
   asgari_odeme_orani?: number; // % (örn: 20 = %20)
   faiz_orani?: number; // Aylık faiz oranı % (örn: 2.5 = %2.5)
-  taksitler?: KrediKartiTaksit[]; // Önceki dönemlerden gelen taksitler
+  taksit_planlari?: TaksitPlani[]; // Ayrı ayrı taksit planları (yeni format)
+  taksitler?: KrediKartiTaksit[]; // Eski format (deprecated)
+  odeme_plani?: OdemePlani; // Eski birleşik taksit planı (deprecated, backward compat)
 }
 
 export interface EkGelir {
@@ -129,6 +145,17 @@ export interface EkGelir {
   tutar: number;
   gun: number; // 1-31
   son_ekleme_tarihi: string | null; // YYYY-MM
+}
+
+export interface SabitGider {
+  id: number;
+  aciklama: string;
+  tutar: number;
+  gun: number; // 1-31, ödeme günü
+  tip: 'nakit' | 'kredi_karti';
+  kredi_karti_id?: number; // tip === 'kredi_karti' ise
+  son_islem_tarihi: string | null; // YYYY-MM
+  kategori?: string;
 }
 
 export interface FinansalVeriler {
@@ -141,5 +168,6 @@ export interface FinansalVeriler {
   harcamalar?: Harcama[];
   kredi_kartlari?: KrediKarti[];
   ek_gelirler?: EkGelir[];
+  sabit_giderler?: SabitGider[];
 }
 

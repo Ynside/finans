@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { parseTutar } from '@/lib/utils'
 import { format, addMonths } from 'date-fns'
-import type { FinansalVeriler, Harcama } from '@/types'
+import { hesaplaBakiye } from '@/lib/kredi-utils'
+import type { FinansalVeriler, Harcama, TaksitPlani } from '@/types'
 
 interface HarcamaEkleModalProps {
   isOpen: boolean
@@ -91,46 +92,35 @@ export function HarcamaEkleModal({ isOpen, onClose, veriler, onSave }: HarcamaEk
     if (tip === 'nakit') {
       yeniVeriler.nakit_bakiye = veriler.nakit_bakiye - parsedTutar
     } else if (tip === 'kredi_karti' && krediKartiId) {
-      // Kredi kartı ise kredi kartı bakiyesine ekle
-      // Taksitlendirme varsa sadece ilk taksit tutarı eklenir, yoksa tam tutar
-      const eklenecekTutar = taksitlendirme ? aylikTutar : parsedTutar
-      yeniVeriler.kredi_kartlari = veriler.kredi_kartlari?.map((kk) =>
-        kk.id === krediKartiId ? { ...kk, bakiye: kk.bakiye + eklenecekTutar } : kk
-      )
-
-      // Taksitlendirme varsa, kalan taksitleri kredi kartına ekle
       if (taksitlendirme) {
-        const seciliKart = veriler.kredi_kartlari?.find((kk) => kk.id === krediKartiId)
-        if (seciliKart) {
-          const kalanTaksitler = parseInt(taksitSayisi) - 1
-          const mevcutTaksitler = seciliKart.taksitler || []
-
-          // Sonraki taksit tarihini hesapla
-          const [gun, ay, yil] = tarih.split('.')
-          const baslangicTarihi = new Date(parseInt(yil), parseInt(ay) - 1, parseInt(gun))
-          const sonrakiTaksitTarihi = format(addMonths(baslangicTarihi, 1), 'dd.MM.yyyy')
-
-          const yeniTaksit = {
-            id: mevcutTaksitler.length + 1,
-            aciklama: aciklama.trim() || `${kategori} Harcaması`,
-            toplam_tutar: parsedTutar,
-            aylik_tutar: aylikTutar,
-            kalan_taksit: kalanTaksitler,
-            toplam_taksit: parseInt(taksitSayisi),
-            baslangic_tarihi: tarih,
-            sonraki_taksit_tarihi: sonrakiTaksitTarihi,
-          }
-
-          yeniVeriler.kredi_kartlari = yeniVeriler.kredi_kartlari?.map((kk) =>
-            kk.id === krediKartiId
-              ? {
-                  ...kk,
-                  taksitler: [...(kk.taksitler || []), yeniTaksit],
-                  bakiye: kk.bakiye + aylikTutar * kalanTaksitler, // Kalan taksitlerin toplamını ekle
-                }
-              : kk
-          )
+        const sonrakiAy = format(addMonths(new Date(), 1), 'yyyy-MM')
+        const yeniTaksit: TaksitPlani = {
+          id: Date.now(),
+          aciklama: (aciklama.trim() || `${kategori} Harcaması`),
+          toplam_tutar: parsedTutar,
+          toplam_taksit: parseInt(taksitSayisi),
+          kalan_taksit: parseInt(taksitSayisi),
+          baslangic: sonrakiAy,
+          aylik_tutar: Math.round(aylikTutar * 100) / 100,
+          harcama_id: yeniId,
         }
+        yeniVeriler.kredi_kartlari = veriler.kredi_kartlari?.map((kk) => {
+          if (kk.id !== krediKartiId) return kk
+          const guncelKart = {
+            ...kk,
+            taksit_planlari: [...(kk.taksit_planlari || []), yeniTaksit],
+          }
+          return { ...guncelKart, bakiye: hesaplaBakiye(guncelKart) }
+        })
+      } else {
+        yeniVeriler.kredi_kartlari = veriler.kredi_kartlari?.map((kk) => {
+          if (kk.id !== krediKartiId) return kk
+          const guncelKart = {
+            ...kk,
+            donem_ici_harcama: (kk.donem_ici_harcama || 0) + parsedTutar,
+          }
+          return { ...guncelKart, bakiye: hesaplaBakiye(guncelKart) }
+        })
       }
     }
 

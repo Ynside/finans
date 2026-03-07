@@ -1,10 +1,9 @@
 'use client'
 
-import { CreditCard } from 'lucide-react'
+import Link from 'next/link'
 import { parse } from 'date-fns'
 import { formatPara, cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
 import type { YaklasanOdeme, FinansalVeriler } from '@/types'
 import { saveData } from '@/lib/storage'
 
@@ -15,6 +14,11 @@ interface OdemeItemProps {
 }
 
 export function OdemeItem({ odeme, veriler, onUpdate }: OdemeItemProps) {
+  // Kredi kartı ödemeleri için ayrı render
+  if (odeme.odeme_tipi === 'kredi_karti') {
+    return <KrediKartiOdemeItem odeme={odeme} />
+  }
+
   const fark = odeme.fark
 
   const getStatusColor = () => {
@@ -38,7 +42,7 @@ export function OdemeItem({ odeme, veriler, onUpdate }: OdemeItemProps) {
       ...veriler,
       nakit_bakiye: veriler.nakit_bakiye - odeme.tutar,
       borclar: veriler.borclar.map((borc) =>
-        borc.id === odeme.borc.id
+        borc.id === odeme.borc!.id
           ? {
               ...borc,
               taksitler: borc.taksitler.map((t, idx) =>
@@ -50,8 +54,8 @@ export function OdemeItem({ odeme, veriler, onUpdate }: OdemeItemProps) {
       odeme_gecmisi: [
         ...veriler.odeme_gecmisi,
         {
-          borc_id: odeme.borc.id,
-          taksit_index: odeme.taksit_index,
+          borc_id: odeme.borc!.id,
+          taksit_index: odeme.taksit_index!,
           tutar: odeme.tutar,
           tarih: new Date().toLocaleString('tr-TR'),
         },
@@ -72,7 +76,7 @@ export function OdemeItem({ odeme, veriler, onUpdate }: OdemeItemProps) {
       .slice()
       .reverse()
       .find(
-        (g) => g.borc_id === odeme.borc.id && g.taksit_index === odeme.taksit_index
+        (g) => g.borc_id === odeme.borc!.id && g.taksit_index === odeme.taksit_index
       )
 
     if (!sonOdeme) {
@@ -84,7 +88,7 @@ export function OdemeItem({ odeme, veriler, onUpdate }: OdemeItemProps) {
       ...veriler,
       nakit_bakiye: veriler.nakit_bakiye + sonOdeme.tutar,
       borclar: veriler.borclar.map((borc) =>
-        borc.id === odeme.borc.id
+        borc.id === odeme.borc!.id
           ? {
               ...borc,
               taksitler: borc.taksitler.map((t, idx) =>
@@ -101,7 +105,7 @@ export function OdemeItem({ odeme, veriler, onUpdate }: OdemeItemProps) {
   }
 
   const odendiMi = veriler.odeme_gecmisi.some(
-    (g) => g.borc_id === odeme.borc.id && g.taksit_index === odeme.taksit_index
+    (g) => g.borc_id === odeme.borc!.id && g.taksit_index === odeme.taksit_index
   )
 
   return (
@@ -138,3 +142,36 @@ export function OdemeItem({ odeme, veriler, onUpdate }: OdemeItemProps) {
   )
 }
 
+function KrediKartiOdemeItem({ odeme }: { odeme: YaklasanOdeme }) {
+  const fark = odeme.fark
+
+  return (
+    <div className="glass rounded-lg sm:rounded-xl p-3 sm:p-4 border border-warning/20 hover:border-warning/30 transition-all premium-card">
+      <div className="flex items-start sm:items-center justify-between mb-2 gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+            <span className="text-[10px] sm:text-xs text-white/60 font-medium">{odeme.vade_str}</span>
+            <span className={cn(
+              "text-[10px] sm:text-xs px-1.5 py-0.5 rounded-full font-medium",
+              fark < 0 ? "bg-danger/20 text-danger" : fark <= 7 ? "bg-warning/20 text-warning" : "bg-white/10 text-white/60"
+            )}>
+              {fark < 0 ? `⚠️ ${Math.abs(fark)} gün gecikme` : fark <= 7 ? `⏰ ${fark} gün kaldı` : `💳 ${fark} gün`}
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm font-semibold text-white truncate">{odeme.aciklama}</p>
+          {odeme.kredi_karti_detay && (
+            <p className="text-[10px] text-white/40 mt-0.5 truncate">{odeme.kredi_karti_detay}</p>
+          )}
+        </div>
+        <span className="text-base sm:text-lg font-bold text-warning whitespace-nowrap flex-shrink-0">
+          {formatPara(odeme.tutar)}
+        </span>
+      </div>
+      <Link href="/kartlar">
+        <Button variant="ghost" size="sm" className="w-full text-xs text-warning/80 hover:text-warning border border-warning/20 hover:border-warning/40 py-2">
+          Kartlara Git
+        </Button>
+      </Link>
+    </div>
+  )
+}

@@ -3,12 +3,13 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, CreditCard, TrendingUp, Calculator, Settings, BarChart3, Menu, X } from 'lucide-react'
+import { LayoutDashboard, CreditCard, TrendingUp, Calculator, Settings, BarChart3, Menu, X, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/borclar', label: 'Borçlar', icon: CreditCard },
+  { href: '/kartlar', label: 'Kartlar', icon: Wallet },
   { href: '/projeksiyon', label: 'Projeksiyon', icon: TrendingUp },
   { href: '/analiz', label: 'Analiz', icon: BarChart3 },
   { href: '/kredi-simulasyon', label: 'Kredi', icon: Calculator },

@@ -2,21 +2,23 @@
 
 import { formatPara, cn } from '@/lib/utils'
 import type { FinansalVeriler, Harcama } from '@/types'
-import { ArrowDownRight, ArrowUpRight, CreditCard } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CreditCard, Trash2 } from 'lucide-react'
 import { Card } from './ui/Card'
 import { format, parse } from 'date-fns'
 
 interface RecentTransactionsProps {
   veriler: FinansalVeriler
+  onHarcamaSil?: (id: number) => void
 }
 
-export function RecentTransactions({ veriler }: RecentTransactionsProps) {
+export function RecentTransactions({ veriler, onHarcamaSil }: RecentTransactionsProps) {
   const sonIslemler: Array<{
     type: 'harcama' | 'gelir'
     aciklama: string
     tutar: number
     tarih: string
     tip?: 'nakit' | 'kredi_karti'
+    harcama_id?: number
   }> = []
 
   // Son harcamalar
@@ -37,6 +39,7 @@ export function RecentTransactions({ veriler }: RecentTransactionsProps) {
       tutar: h.tutar,
       tarih: h.tarih,
       tip: h.tip,
+      harcama_id: h.id,
     }))
 
   sonIslemler.push(...sonHarcamalar)
@@ -118,12 +121,27 @@ export function RecentTransactions({ veriler }: RecentTransactionsProps) {
                 </p>
               </div>
             </div>
-            <div className={cn(
-              "text-xs sm:text-sm font-semibold flex-shrink-0 ml-2",
-              islem.type === 'harcama' ? "text-danger" : "text-success"
-            )}>
-              {islem.type === 'harcama' ? '-' : '+'}
-              {formatPara(islem.tutar)}
+            <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+              <span className={cn(
+                "text-xs sm:text-sm font-semibold",
+                islem.type === 'harcama' ? "text-danger" : "text-success"
+              )}>
+                {islem.type === 'harcama' ? '-' : '+'}
+                {formatPara(islem.tutar)}
+              </span>
+              {islem.harcama_id != null && onHarcamaSil && (
+                <button
+                  onClick={() => {
+                    if (confirm('Bu harcamayı silmek istediğinize emin misiniz?')) {
+                      onHarcamaSil(islem.harcama_id!)
+                    }
+                  }}
+                  className="p-1 rounded text-white/30 hover:text-danger hover:bg-danger/10 transition-all"
+                  title="Sil"
+                >
+                  <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                </button>
+              )}
             </div>
           </div>
         ))}

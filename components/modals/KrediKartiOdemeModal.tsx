@@ -118,12 +118,27 @@ export function KrediKartiOdemeModal({
       return
     }
 
+    const tamOdeme = odenecekTutar >= krediKarti.bakiye
+
     const yeniVeriler: FinansalVeriler = {
       ...veriler,
       nakit_bakiye: veriler.nakit_bakiye - odenecekTutar,
-      kredi_kartlari: veriler.kredi_kartlari?.map((kk) =>
-        kk.id === krediKarti.id ? { ...kk, bakiye: kk.bakiye - odenecekTutar } : kk
-      ),
+      kredi_kartlari: veriler.kredi_kartlari?.map((kk) => {
+        if (kk.id !== krediKarti.id) return kk
+        if (tamOdeme) {
+          // Tam ödeme: tüm bakiye bileşenlerini sıfırla
+          return {
+            ...kk,
+            bakiye: 0,
+            donem_borcu: undefined,
+            donem_ici_harcama: undefined,
+            taksit_planlari: kk.taksit_planlari !== undefined ? [] : undefined,
+            odeme_plani: undefined,
+          }
+        }
+        // Kısmi ödeme: sadece bakiyeden düş
+        return { ...kk, bakiye: Math.max(0, kk.bakiye - odenecekTutar) }
+      }),
     }
 
     onSave(yeniVeriler)

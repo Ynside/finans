@@ -4,7 +4,6 @@ const url = require('url')
 const fs = require('fs')
 
 const isDev = !app.isPackaged
-const STORAGE_KEY = 'finansal_veriler'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -31,31 +30,6 @@ function createWindow() {
     },
   })
 
-  // Sayfa DOM'a hazır olduğunda, localStorage boşsa dosyadan yükle
-  win.webContents.on('dom-ready', () => {
-    const dataFile = getDataFilePath()
-    if (fs.existsSync(dataFile)) {
-      try {
-        const data = fs.readFileSync(dataFile, 'utf-8')
-        const escaped = JSON.stringify(data)
-        win.webContents.executeJavaScript(`
-          (function() {
-            try {
-              if (!localStorage.getItem('${STORAGE_KEY}')) {
-                localStorage.setItem('${STORAGE_KEY}', ${escaped});
-                console.log('[Finansal] Veriler dosyadan yüklendi.');
-              }
-            } catch(e) {
-              console.error('[Finansal] Veri yükleme hatası:', e);
-            }
-          })();
-        `)
-      } catch (err) {
-        console.error('Veri dosyası okuma hatası:', err)
-      }
-    }
-  })
-
   if (isDev) {
     win.loadURL('http://localhost:3000')
     win.webContents.openDevTools()
@@ -63,6 +37,20 @@ function createWindow() {
     win.loadURL('app://localhost/index.html')
   }
 }
+
+// IPC: React'in doğrudan dosyadan senkron okuması için
+ipcMain.on('load-data-sync', (event) => {
+  const dataFile = getDataFilePath()
+  if (fs.existsSync(dataFile)) {
+    try {
+      event.returnValue = fs.readFileSync(dataFile, 'utf-8')
+    } catch {
+      event.returnValue = null
+    }
+  } else {
+    event.returnValue = null
+  }
+})
 
 // IPC: Renderer'dan gelen veriyi dosyaya kaydet
 ipcMain.handle('save-data', (event, jsonData) => {
