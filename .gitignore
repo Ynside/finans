@@ -5,3 +5,12 @@ dist/
 dist-github/
 *.local
 .env*
+
+# Android
+android/build/
+android/app/build/
+android/local.properties
+android/.gradle/
+android/captures/
+android/.idea/
+android/*.iml

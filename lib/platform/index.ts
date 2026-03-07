@@ -12,14 +12,16 @@ export const PLATFORM = {
 
 export type Platform = typeof PLATFORM[keyof typeof PLATFORM]
 
-// Platform tespit fonksiyonu (şimdilik sadece web)
+// Platform tespit fonksiyonu
 export function getPlatform(): Platform {
   if (typeof window === 'undefined') return PLATFORM.WEB
-  
-  // React Native için gelecekte burada kontrol yapılacak
-  // const { Platform } = require('react-native')
-  // return Platform.OS === 'ios' ? PLATFORM.IOS : PLATFORM.ANDROID
-  
+
+  // Capacitor: window.Capacitor objesi varsa native platformdayız
+  const cap = (window as any).Capacitor
+  if (cap?.isNativePlatform?.()) {
+    return cap.getPlatform() === 'ios' ? PLATFORM.IOS : PLATFORM.ANDROID
+  }
+
   return PLATFORM.WEB
 }
 

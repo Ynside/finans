@@ -10,7 +10,9 @@
     "lint": "next lint",
     "electron:dev": "concurrently \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "next build && electron-builder",
-    "electron:pack": "next build && electron-builder --dir"
+    "electron:pack": "next build && electron-builder --dir",
+    "android:sync": "next build && npx cap sync android",
+    "android:open": "npx cap open android"
   },
   "build": {
     "appId": "com.finansaltakip.app",
@@ -30,7 +32,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
     },
-    "electronLanguages": ["en-US", "tr"],
+    "electronLanguages": [
+      "en-US",
+      "tr"
+    ],
     "mac": {
       "target": "dmg",
       "category": "public.app-category.finance",
@@ -40,8 +45,10 @@
       "title": "Finansal Takip Sistemi"
     }
   },
-  "dependencies": {},
   "devDependencies": {
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/cli": "^8.2.0",
+    "@capacitor/core": "^8.2.0",
     "@types/jspdf": "^2.0.0",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.0",
