@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, DollarSign, Wallet, Download, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, DollarSign, Wallet, Download, AlertTriangle, Receipt } from 'lucide-react'
 import { loadData, saveData, resetData } from '@/lib/storage'
 import { formatPara, parseTutar } from '@/lib/utils'
-import { maasKontrolEt, ekGelirKontrolEt } from '@/lib/finansal'
-import type { FinansalVeriler, EkGelir } from '@/types'
+import { maasKontrolEt, ekGelirKontrolEt, sabitGiderKontrolEt } from '@/lib/finansal'
+import type { FinansalVeriler, EkGelir, SabitGider } from '@/types'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -18,13 +18,15 @@ export default function AyarlarPage() {
   const [maasTutar, setMaasTutar] = useState('')
   const [maasGun, setMaasGun] = useState('1')
   const [ekGelirModalOpen, setEkGelirModalOpen] = useState(false)
+  const [sabitGiderModalOpen, setSabitGiderModalOpen] = useState(false)
   const [yedeklemeModalOpen, setYedeklemeModalOpen] = useState(false)
   const [sifirlama, setSifirlama] = useState<'idle' | 'countdown' | 'confirm'>('idle')
   const [geriSayim, setGeriSayim] = useState(5)
 
   useEffect(() => {
     const data = loadData()
-    const { veriler: yeniVeriler } = ekGelirKontrolEt(data)
+    const { veriler: gelirVeriler } = ekGelirKontrolEt(data)
+    const { veriler: yeniVeriler } = sabitGiderKontrolEt(gelirVeriler)
     setVeriler(yeniVeriler)
     setMaasTutar(data.maas.tutar.toString())
     setMaasGun(data.maas.gun.toString())
@@ -92,10 +94,21 @@ export default function AyarlarPage() {
 
   const handleEkGelirDelete = (id: number) => {
     if (!confirm('Bu ek geliri silmek istediğinize emin misiniz?')) return
-    
+
     const yeniVeriler: FinansalVeriler = {
       ...veriler!,
       ek_gelirler: veriler!.ek_gelirler?.filter((eg) => eg.id !== id) || [],
+    }
+    saveData(yeniVeriler)
+    setVeriler(yeniVeriler)
+  }
+
+  const handleSabitGiderDelete = (id: number) => {
+    if (!confirm('Bu sabit gideri silmek istediğinize emin misiniz?')) return
+
+    const yeniVeriler: FinansalVeriler = {
+      ...veriler!,
+      sabit_giderler: veriler!.sabit_giderler?.filter((sg) => sg.id !== id) || [],
     }
     saveData(yeniVeriler)
     setVeriler(yeniVeriler)
@@ -217,6 +230,61 @@ export default function AyarlarPage() {
             )}
           </Card>
 
+          {/* Sabit Giderler */}
+          <Card className="premium-card p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-orange-500/20">
+                  <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-white">Sabit Giderler</h2>
+                  <p className="text-[10px] sm:text-xs text-white/60">Aylık tekrarlayan giderleriniz</p>
+                </div>
+              </div>
+              <Button onClick={() => setSabitGiderModalOpen(true)} variant="primary" size="sm" className="text-xs sm:text-sm">
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
+                Ekle
+              </Button>
+            </div>
+
+            {veriler.sabit_giderler && veriler.sabit_giderler.length > 0 ? (
+              <div className="space-y-2 sm:space-y-3">
+                {veriler.sabit_giderler.map((sg) => {
+                  const kart = veriler.kredi_kartlari?.find((kk) => kk.id === sg.kredi_karti_id)
+                  return (
+                    <div key={sg.id} className="glass rounded-lg p-3 sm:p-4 border border-white/10 flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm sm:text-base font-semibold text-white mb-0.5 sm:mb-1 truncate">{sg.aciklama}</p>
+                        <p className="text-xs sm:text-sm text-white/60">
+                          {formatPara(sg.tutar)} • Her ayın {sg.gun}. günü •{' '}
+                          <span className={sg.tip === 'nakit' ? 'text-blue-400' : 'text-orange-400'}>
+                            {sg.tip === 'nakit' ? 'Nakit' : kart ? kart.ad : 'Kredi Kartı'}
+                          </span>
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() => handleSabitGiderDelete(sg.id)}
+                        variant="ghost"
+                        size="sm"
+                        className="ml-2 flex-shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 sm:py-12">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-white/5 mx-auto mb-3 sm:mb-4 flex items-center justify-center">
+                  <Receipt className="w-6 h-6 sm:w-8 sm:h-8 text-white/20" />
+                </div>
+                <p className="text-white/60 text-xs sm:text-sm">Henüz sabit gider eklenmemiş</p>
+              </div>
+            )}
+          </Card>
+
           {/* Veri Yedekleme */}
           <Card className="premium-card lg:col-span-2 p-4 sm:p-6">
             <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
@@ -327,6 +395,17 @@ export default function AyarlarPage() {
         }}
       />
 
+      <SabitGiderEkleModal
+        isOpen={sabitGiderModalOpen}
+        onClose={() => setSabitGiderModalOpen(false)}
+        veriler={veriler}
+        onSave={(yeniVeriler) => {
+          saveData(yeniVeriler)
+          setVeriler(yeniVeriler)
+          setSabitGiderModalOpen(false)
+        }}
+      />
+
     </div>
   )
 }
@@ -412,6 +491,172 @@ function EkGelirEkleModal({
           required
         />
         <div className="flex gap-3 pt-4">
+          <Button type="button" variant="secondary" onClick={onClose} className="flex-1">
+            İptal
+          </Button>
+          <Button type="submit" variant="primary" className="flex-1">
+            💾 Kaydet
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function SabitGiderEkleModal({
+  isOpen,
+  onClose,
+  veriler,
+  onSave,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  veriler: FinansalVeriler
+  onSave: (veriler: FinansalVeriler) => void
+}) {
+  const [aciklama, setAciklama] = useState('')
+  const [tutar, setTutar] = useState('')
+  const [gun, setGun] = useState('1')
+  const [tip, setTip] = useState<'nakit' | 'kredi_karti'>('nakit')
+  const [krediKartiId, setKrediKartiId] = useState<string>('')
+
+  const kartlar = veriler.kredi_kartlari || []
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const parsedTutar = parseTutar(tutar)
+    const parsedGun = parseInt(gun)
+
+    if (!aciklama.trim() || parsedTutar <= 0) {
+      alert('Lütfen geçerli bilgiler girin!')
+      return
+    }
+
+    if (parsedGun < 1 || parsedGun > 31) {
+      alert('Gün 1-31 arası olmalı!')
+      return
+    }
+
+    if (tip === 'kredi_karti' && !krediKartiId) {
+      alert('Lütfen bir kredi kartı seçin!')
+      return
+    }
+
+    const yeniId = Math.max(...(veriler.sabit_giderler?.map((sg) => sg.id) || [0]), 0) + 1
+
+    const yeniGider: SabitGider = {
+      id: yeniId,
+      aciklama: aciklama.trim(),
+      tutar: parsedTutar,
+      gun: parsedGun,
+      tip,
+      kredi_karti_id: tip === 'kredi_karti' ? parseInt(krediKartiId) : undefined,
+      son_islem_tarihi: null,
+    }
+
+    const yeniVeriler: FinansalVeriler = {
+      ...veriler,
+      sabit_giderler: [...(veriler.sabit_giderler || []), yeniGider],
+    }
+
+    onSave(yeniVeriler)
+    setAciklama('')
+    setTutar('')
+    setGun('1')
+    setTip('nakit')
+    setKrediKartiId('')
+    onClose()
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="🔁 Sabit Gider Ekle" size="sm">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          label="Açıklama"
+          value={aciklama}
+          onChange={(e) => setAciklama(e.target.value)}
+          placeholder="Örn: Netflix, Spotify, Kira"
+          required
+        />
+        <Input
+          label="Tutar (TL)"
+          value={tutar}
+          onChange={(e) => setTutar(e.target.value)}
+          placeholder="200"
+          type="number"
+          required
+        />
+        <Input
+          label="Ödeme Günü (1-31)"
+          type="number"
+          min="1"
+          max="31"
+          value={gun}
+          onChange={(e) => setGun(e.target.value)}
+          required
+        />
+
+        <div>
+          <label className="block text-sm font-semibold text-white/80 mb-2">Ödeme Yöntemi</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setTip('nakit')}
+              className={`px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
+                tip === 'nakit'
+                  ? 'bg-blue-500/20 border-blue-500/60 text-blue-400'
+                  : 'glass border-white/10 text-white/60 hover:border-white/30'
+              }`}
+            >
+              Nakit / Banka
+            </button>
+            <button
+              type="button"
+              onClick={() => setTip('kredi_karti')}
+              className={`px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
+                tip === 'kredi_karti'
+                  ? 'bg-orange-500/20 border-orange-500/60 text-orange-400'
+                  : 'glass border-white/10 text-white/60 hover:border-white/30'
+              }`}
+            >
+              Kredi Kartı
+            </button>
+          </div>
+        </div>
+
+        {tip === 'kredi_karti' && kartlar.length > 0 && (
+          <div>
+            <label className="block text-sm font-semibold text-white/80 mb-2">Hangi Kart?</label>
+            <select
+              value={krediKartiId}
+              onChange={(e) => setKrediKartiId(e.target.value)}
+              className="w-full px-4 py-3 glass border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary bg-transparent"
+              required
+            >
+              <option value="" className="bg-gray-900">Kart seçin...</option>
+              {kartlar.map((kk) => (
+                <option key={kk.id} value={kk.id} className="bg-gray-900">{kk.ad}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {tip === 'kredi_karti' && kartlar.length === 0 && (
+          <div className="glass rounded-lg p-3 border border-orange-500/20">
+            <p className="text-xs text-orange-400">Henüz kredi kartı eklenmemiş. Önce Kartlar sayfasından kart ekleyin.</p>
+          </div>
+        )}
+
+        <div className="glass rounded-lg p-3 border border-white/10">
+          <p className="text-xs text-white/50">
+            {tip === 'nakit'
+              ? '💡 Her ayın belirtilen gününde nakit bakiyenizden otomatik düşülür.'
+              : '💡 Her ayın belirtilen gününde seçili kartın dönem içi harcamasına eklenir.'}
+          </p>
+        </div>
+
+        <div className="flex gap-3 pt-2">
           <Button type="button" variant="secondary" onClick={onClose} className="flex-1">
             İptal
           </Button>

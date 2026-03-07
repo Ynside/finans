@@ -1,4 +1,5 @@
 import { addMonths, parse, format, startOfMonth, endOfMonth, isWithinInterval, differenceInDays } from 'date-fns'
+import { hesaplaBakiye as hesaplaBakiyeLocal } from '@/lib/kredi-utils'
 import type { EkGelir } from '@/types'
 import type {
   FinansalVeriler,
@@ -81,18 +82,30 @@ export function hesaplaFinansalDurum(veriler: FinansalVeriler): FinansalDurum {
       }
     }
 
-    // Taksit planları
-    if (kk.taksit_planlari) {
-      for (const tp of kk.taksit_planlari) {
-        try {
-          const [planYil, planAy] = tp.baslangic.split('-').map(Number)
-          const planStart = planYil * 12 + planAy - 1
-          const idx = hedefStart - planStart
-          if (idx >= 0 && idx < tp.kalan_taksit) {
-            kartOdeme += tp.aylik_odemeler?.[idx] ?? tp.aylik_tutar
+    // Taksit planları — yeni format
+    for (const tp of (kk.taksit_planlari || [])) {
+      try {
+        const [planYil, planAy] = tp.baslangic.split('-').map(Number)
+        const planStart = planYil * 12 + planAy - 1
+        const idx = hedefStart - planStart
+        if (idx >= 0 && idx < tp.kalan_taksit) {
+          kartOdeme += tp.aylik_odemeler?.[idx] ?? tp.aylik_tutar
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Taksitler — eski format (KrediKartiTaksit[])
+    for (const t of (kk.taksitler || [])) {
+      try {
+        const [gun, ayNo, yil] = t.sonraki_taksit_tarihi.split('.').map(Number)
+        const ilkOdeme = new Date(yil, ayNo - 1, gun)
+        for (let i = 0; i < t.kalan_taksit; i++) {
+          const odemeTarihi = addMonths(ilkOdeme, i)
+          if (isWithinInterval(odemeTarihi, { start: ay_basi, end: ay_sonu })) {
+            kartOdeme += t.aylik_odemeler?.[i] ?? t.aylik_tutar
           }
-        } catch { /* ignore */ }
-      }
+        }
+      } catch { /* ignore */ }
     }
 
     return toplam + kartOdeme
@@ -431,7 +444,12 @@ export function projeksiyonHesapla(
     const harcamaTutari =
       ay_offset === 0 ? buAyHarcamaToplam : ortalamaAylikHarcama
 
-    const gider = borcGider + harcamaTutari + krediKartiTaksitOdeme + donemBorcuOdeme + donemIciOdeme
+    // Sabit giderler — sadece nakit tipi (kredi kartı tipler donem_ici_harcama'ya eklenir, orada zaten sayılır)
+    const sabitGiderToplam = (veriler.sabit_giderler || [])
+      .filter((sg) => sg.tip === 'nakit')
+      .reduce((sum, sg) => sum + sg.tutar, 0)
+
+    const gider = borcGider + harcamaTutari + krediKartiTaksitOdeme + donemBorcuOdeme + donemIciOdeme + sabitGiderToplam
 
     let kredi_taksit = 0
     if (ekKredi) {
@@ -598,24 +616,42 @@ export function yaklasanOdemeleriGetir(veriler: FinansalVeriler, gunSayisi: numb
       }
     }
 
-    // 3. Taksit planları — önümüzdeki 3 ay
-    if (kk.taksit_planlari && kk.taksit_planlari.length > 0) {
+    // 3. Taksit planları — önümüzdeki 3 ay (tüm formatlar)
+    const hasTaksitler = (kk.taksit_planlari?.length ?? 0) > 0 || (kk.taksitler?.length ?? 0) > 0 || !!kk.odeme_plani
+    if (hasTaksitler) {
       for (let offset = 0; offset <= 3; offset++) {
         const checkDate = addMonths(startOfMonth(bugun), offset)
+        const checkAy_basi = startOfMonth(checkDate)
+        const checkAy_sonu = endOfMonth(checkDate)
         const hedefStart = checkDate.getFullYear() * 12 + checkDate.getMonth()
 
         let monthTotal = 0
         const monthDetails: string[] = []
 
-        for (const tp of kk.taksit_planlari) {
+        // Yeni format
+        for (const tp of (kk.taksit_planlari || [])) {
           try {
             const [planYil, planAy] = tp.baslangic.split('-').map(Number)
             const planStart = planYil * 12 + planAy - 1
             const idx = hedefStart - planStart
             if (idx >= 0 && idx < tp.kalan_taksit) {
-              const tutar = tp.aylik_odemeler?.[idx] ?? tp.aylik_tutar
-              monthTotal += tutar
+              monthTotal += tp.aylik_odemeler?.[idx] ?? tp.aylik_tutar
               monthDetails.push(tp.aciklama)
+            }
+          } catch { /* ignore */ }
+        }
+
+        // Eski format (KrediKartiTaksit[])
+        for (const t of (kk.taksitler || [])) {
+          try {
+            const [gun, ayNo, yil] = t.sonraki_taksit_tarihi.split('.').map(Number)
+            const ilkOdeme = new Date(yil, ayNo - 1, gun)
+            for (let i = 0; i < t.kalan_taksit; i++) {
+              const odemeTarihi = addMonths(ilkOdeme, i)
+              if (isWithinInterval(odemeTarihi, { start: checkAy_basi, end: checkAy_sonu })) {
+                monthTotal += t.aylik_odemeler?.[i] ?? t.aylik_tutar
+                monthDetails.push(t.aciklama)
+              }
             }
           } catch { /* ignore */ }
         }
@@ -734,6 +770,57 @@ export function ekGelirKontrolEt(veriler: FinansalVeriler): { veriler: FinansalV
   }
 
   return { veriler: yeniVeriler, ekGelirEklendi }
+}
+
+export function sabitGiderKontrolEt(veriler: FinansalVeriler): { veriler: FinansalVeriler; islemYapildi: boolean } {
+  const bugun = new Date()
+  let islemYapildi = false
+  let yeniVeriler = { ...veriler, kredi_kartlari: veriler.kredi_kartlari ? [...veriler.kredi_kartlari] : [] }
+
+  for (const gider of veriler.sabit_giderler || []) {
+    if (gider.tutar <= 0) continue
+
+    const sonIslem = gider.son_islem_tarihi
+    const bugun_ay = bugun.getMonth() + 1
+    const bugun_yil = bugun.getFullYear()
+
+    let islemeGerek = false
+
+    if (sonIslem === null) {
+      if (bugun.getDate() >= gider.gun) islemeGerek = true
+    } else {
+      try {
+        const [son_yil, son_ay] = sonIslem.split('-').map(Number)
+        if (
+          (bugun_yil > son_yil || (bugun_yil === son_yil && bugun_ay > son_ay)) &&
+          bugun.getDate() >= gider.gun
+        ) {
+          islemeGerek = true
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (!islemeGerek) continue
+
+    if (gider.tip === 'nakit') {
+      yeniVeriler.nakit_bakiye -= gider.tutar
+    } else if (gider.tip === 'kredi_karti' && gider.kredi_karti_id) {
+      yeniVeriler.kredi_kartlari = yeniVeriler.kredi_kartlari?.map((kk) => {
+        if (kk.id !== gider.kredi_karti_id) return kk
+        const guncellenmis = { ...kk, donem_ici_harcama: (kk.donem_ici_harcama || 0) + gider.tutar }
+        return { ...guncellenmis, bakiye: hesaplaBakiyeLocal(guncellenmis) }
+      })
+    }
+
+    yeniVeriler.sabit_giderler = yeniVeriler.sabit_giderler?.map((sg) =>
+      sg.id === gider.id
+        ? { ...sg, son_islem_tarihi: format(bugun, 'yyyy-MM') }
+        : sg
+    )
+    islemYapildi = true
+  }
+
+  return { veriler: yeniVeriler, islemYapildi }
 }
 
 function formatPara(tutar: number): string {

@@ -5,7 +5,7 @@ import { Wallet, TrendingUp, Calendar, Plus, ArrowUpRight, ArrowDownRight, Credi
 import { loadData, saveData, isOnboardingDone, setOnboardingDone } from '@/lib/storage'
 import { hesaplaBakiye } from '@/lib/kredi-utils'
 import { OnboardingWizard } from '@/components/OnboardingWizard'
-import { hesaplaFinansalDurum, bildirimleriOlustur, yaklasanOdemeleriGetir, maasKontrolEt, ekGelirKontrolEt } from '@/lib/finansal'
+import { hesaplaFinansalDurum, bildirimleriOlustur, yaklasanOdemeleriGetir, maasKontrolEt, ekGelirKontrolEt, sabitGiderKontrolEt } from '@/lib/finansal'
 import { formatPara } from '@/lib/utils'
 import type { FinansalVeriler, YaklasanOdeme } from '@/types'
 import { Button } from '@/components/ui/Button'
@@ -45,12 +45,13 @@ export default function DashboardPage() {
 
     const data = loadData()
     const { veriler: maasVeriler, maasEklendi } = maasKontrolEt(data)
-    const { veriler: yeniVeriler, ekGelirEklendi } = ekGelirKontrolEt(maasVeriler)
-    
+    const { veriler: gelirVeriler, ekGelirEklendi } = ekGelirKontrolEt(maasVeriler)
+    const { veriler: yeniVeriler } = sabitGiderKontrolEt(gelirVeriler)
+
     if (maasEklendi) {
       alert(`✅ ${formatPara(data.maas.tutar)} maaşınız eklendi!`)
     }
-    
+
     if (ekGelirEklendi) {
       const eklenenToplam = (data.ek_gelirler || [])
         .filter((eg) => {
@@ -69,7 +70,7 @@ export default function DashboardPage() {
         alert(`✅ ${formatPara(eklenenToplam)} ek gelir eklendi!`)
       }
     }
-    
+
     saveData(yeniVeriler)
     setVeriler(yeniVeriler)
   }, [])
@@ -79,7 +80,8 @@ export default function DashboardPage() {
     setOnboardingDone()
     setOnboardingAcik(false)
     const { veriler: maasVeriler, maasEklendi } = maasKontrolEt(yeniVeriler)
-    const { veriler: sonVeriler } = ekGelirKontrolEt(maasVeriler)
+    const { veriler: gelirVeriler } = ekGelirKontrolEt(maasVeriler)
+    const { veriler: sonVeriler } = sabitGiderKontrolEt(gelirVeriler)
     if (maasEklendi) {
       alert(`✅ ${formatPara(yeniVeriler.maas.tutar)} maaşınız eklendi!`)
     }

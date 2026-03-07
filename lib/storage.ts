@@ -138,6 +138,7 @@ function getDefaultData(): FinansalVeriler {
     harcamalar: [],
     kredi_kartlari: [],
     ek_gelirler: [],
+    sabit_giderler: [],
   }
 }
 
@@ -152,6 +153,7 @@ function normalizeData(data: any): FinansalVeriler {
     hedefler: data.hedefler || [],
     kredi_kartlari: data.kredi_kartlari || [],
     harcamalar: data.harcamalar || [],
+    sabit_giderler: data.sabit_giderler || [],
   }
 }
 
@@ -163,6 +165,7 @@ function dataWeight(data: FinansalVeriler): number {
     (data.kredi_kartlari?.length || 0) +
     (data.ek_gelirler?.length || 0) +
     (data.odeme_gecmisi?.length || 0) +
+    (data.sabit_giderler?.length || 0) +
     (data.nakit_bakiye > 0 ? 1 : 0) +
     (data.maas?.tutar > 0 ? 1 : 0)
   )

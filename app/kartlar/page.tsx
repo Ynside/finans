@@ -10,7 +10,6 @@ import { tr } from 'date-fns/locale'
 import type { FinansalVeriler, KrediKarti, TaksitPlani } from '@/types'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
 import { KrediKartiEkleModal } from '@/components/modals/KrediKartiEkleModal'
 import { KrediKartiOdemeModal } from '@/components/modals/KrediKartiOdemeModal'
 import { TaksitEkleModal } from '@/components/modals/TaksitEkleModal'
@@ -316,16 +315,21 @@ function KartDetay({
   const [taksitModalOpen, setTaksitModalOpen] = useState(false)
   const [duzenlenecekTaksit, setDuzenlenecekTaksit] = useState<TaksitPlani | undefined>(undefined)
   const [odemeModalOpen, setOdemeModalOpen] = useState(false)
-  const [ekstreEdit, setEkstreEdit] = useState(false)
   const [ekstreEditDeger, setEkstreEditDeger] = useState('')
-  const [donemIciEdit, setDonemIciEdit] = useState(false)
   const [donemIciEditDeger, setDonemIciEditDeger] = useState('')
   const [acikAy, setAcikAy] = useState<string | null>(null)
+  const [entegrasyonAcik, setEntegrasyonAcik] = useState(false)
   const [editingKalem, setEditingKalem] = useState<{ taksitId: number; tip: 'yeni' | 'eski'; ayIdx: number } | null>(null)
   const [editTutar, setEditTutar] = useState('')
 
   // Güncel kart verisini her zaman verilerden çek
   const guncelKart = kartlar.find((k) => k.id === kart.id) || kart
+
+  // Entegrasyon alanı: kart değişince inputları senkronize et
+  useEffect(() => {
+    setEkstreEditDeger(guncelKart.donem_borcu?.toString() || '')
+    setDonemIciEditDeger(guncelKart.donem_ici_harcama?.toString() || '')
+  }, [guncelKart.id, guncelKart.donem_borcu, guncelKart.donem_ici_harcama])
 
   const takvim = odemeTakvimiHesapla(guncelKart)
   const kullanim = guncelKart.limit ? Math.min(100, (guncelKart.bakiye / guncelKart.limit) * 100) : null
@@ -400,28 +404,20 @@ function KartDetay({
     setEditTutar('')
   }
 
-  const handleEkstreSave = () => {
-    const tutar = parseFloat(ekstreEditDeger.replace(',', '.')) || 0
-    const guncel = { ...guncelKart, donem_borcu: tutar > 0 ? tutar : undefined }
+  const handleEntegrasyonSave = () => {
+    const ekstreTutar = parseFloat(ekstreEditDeger.replace(',', '.')) || 0
+    const donemIciTutar = parseFloat(donemIciEditDeger.replace(',', '.')) || 0
+    const guncel = {
+      ...guncelKart,
+      donem_borcu: ekstreTutar > 0 ? ekstreTutar : undefined,
+      donem_ici_harcama: donemIciTutar > 0 ? donemIciTutar : undefined,
+    }
     const yeniVeriler = {
       ...veriler,
       kredi_kartlari: kartlar.map((k) => k.id === guncel.id ? { ...guncel, bakiye: hesaplaBakiye(guncel) } : k),
     }
     saveData(yeniVeriler)
     onVerilerGuncelle(yeniVeriler)
-    setEkstreEdit(false)
-  }
-
-  const handleDonemIciSave = () => {
-    const tutar = parseFloat(donemIciEditDeger.replace(',', '.')) || 0
-    const guncel = { ...guncelKart, donem_ici_harcama: tutar > 0 ? tutar : undefined }
-    const yeniVeriler = {
-      ...veriler,
-      kredi_kartlari: kartlar.map((k) => k.id === guncel.id ? { ...guncel, bakiye: hesaplaBakiye(guncel) } : k),
-    }
-    saveData(yeniVeriler)
-    onVerilerGuncelle(yeniVeriler)
-    setDonemIciEdit(false)
   }
 
   return (
@@ -509,66 +505,15 @@ function KartDetay({
         )}
       </Card>
 
-      {/* Ekstre + Dönem İçi */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Ekstre borcu */}
-        <Card className="premium-card p-4">
-          <p className="text-xs text-white/50 mb-2">📋 Güncel Ekstre Borcu</p>
-          {ekstreEdit ? (
-            <div className="space-y-2">
-              <Input label="" value={ekstreEditDeger} onChange={(e) => setEkstreEditDeger(e.target.value)} placeholder="0" autoFocus />
-              <div className="flex gap-2">
-                <Button onClick={handleEkstreSave} variant="success" size="sm" className="flex-1 text-xs">Kaydet</Button>
-                <Button onClick={() => setEkstreEdit(false)} variant="secondary" size="sm" className="flex-1 text-xs">İptal</Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <p className="text-xl font-bold text-warning">{guncelKart.donem_borcu ? formatPara(guncelKart.donem_borcu) : '—'}</p>
-              <p className="text-[10px] text-white/40 mt-0.5 mb-3">Kilitli ekstre, gelecek son ödeme gününde ödenecek</p>
-              <div className="flex gap-2">
-                <Button onClick={() => { setEkstreEditDeger(guncelKart.donem_borcu?.toString() || ''); setEkstreEdit(true) }} variant="ghost" size="sm" className="flex-1 text-xs">
-                  <Pencil className="w-3 h-3 mr-1" /> Düzenle
-                </Button>
-                {guncelKart.donem_borcu && guncelKart.donem_borcu > 0 && (
-                  <Button onClick={() => setOdemeModalOpen(true)} variant="success" size="sm" className="flex-1 text-xs">
-                    💰 Öde
-                  </Button>
-                )}
-              </div>
-            </>
-          )}
-        </Card>
-
-        {/* Dönem içi */}
-        <Card className="premium-card p-4">
-          <p className="text-xs text-white/50 mb-2">🛒 Dönem İçi Harcama</p>
-          {donemIciEdit ? (
-            <div className="space-y-2">
-              <Input label="" value={donemIciEditDeger} onChange={(e) => setDonemIciEditDeger(e.target.value)} placeholder="0" autoFocus />
-              <div className="flex gap-2">
-                <Button onClick={handleDonemIciSave} variant="success" size="sm" className="flex-1 text-xs">Kaydet</Button>
-                <Button onClick={() => setDonemIciEdit(false)} variant="secondary" size="sm" className="flex-1 text-xs">İptal</Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <p className="text-xl font-bold text-white/80">{guncelKart.donem_ici_harcama ? formatPara(guncelKart.donem_ici_harcama) : '—'}</p>
-              <p className="text-[10px] text-white/40 mt-0.5 mb-3">Sonraki ekstreden kesilecek</p>
-              <Button onClick={() => { setDonemIciEditDeger(guncelKart.donem_ici_harcama?.toString() || ''); setDonemIciEdit(true) }} variant="ghost" size="sm" className="w-full text-xs">
-                <Pencil className="w-3 h-3 mr-1" /> Düzenle
-              </Button>
-            </>
-          )}
-        </Card>
-      </div>
-
       {/* Taksit Planları */}
       <Card className="premium-card p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm sm:text-base font-bold text-white">Taksit Planları</h3>
-            <p className="text-xs text-white/50">{(guncelKart.taksit_planlari || []).length + (guncelKart.taksitler || []).length} aktif plan · Kalan: {formatPara(taksitKalanToplam)}</p>
+            <p className="text-xs text-white/50">
+              {(guncelKart.taksit_planlari || []).length + (guncelKart.taksitler || []).length} plan
+              {taksitKalanToplam > 0 ? ` · Kalan: ${formatPara(taksitKalanToplam)}` : ''}
+            </p>
           </div>
           <Button onClick={() => { setDuzenlenecekTaksit(undefined); setTaksitModalOpen(true) }} variant="primary" size="sm" className="text-xs">
             <Plus className="w-3.5 h-3.5 mr-1" /> Taksit Ekle
@@ -591,14 +536,13 @@ function KartDetay({
                 const [y, m] = tp.baslangic.split('-').map(Number)
                 return format(new Date(y, m - 1 + tp.kalan_taksit - 1, 1), 'MMM yyyy', { locale: tr })
               })()
-
               return (
                 <div key={tp.id} className="glass rounded-xl p-3 sm:p-4 border border-white/10">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-white truncate">{tp.aciklama}</p>
                       <p className="text-xs text-white/50">
-                        {tp.toplam_taksit - tp.kalan_taksit + 1}/{tp.toplam_taksit} taksit · {formatPara(tp.aylik_tutar)}/ay · bitiş: {bitisTarihi}
+                        {odenmisTaksit + 1}/{tp.toplam_taksit} taksit · {formatPara(tp.aylik_tutar)}/ay · bitiş: {bitisTarihi}
                       </p>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
@@ -610,10 +554,8 @@ function KartDetay({
                       </Button>
                     </div>
                   </div>
-                  <div className="mb-2">
-                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full bg-primary rounded-full" style={{ width: `${(odenmisTaksit / tp.toplam_taksit) * 100}%` }} />
-                    </div>
+                  <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mb-1.5">
+                    <div className="h-full bg-primary rounded-full" style={{ width: `${(odenmisTaksit / tp.toplam_taksit) * 100}%` }} />
                   </div>
                   <div className="flex justify-between items-center">
                     <p className="text-xs text-white/40">{ayAdi(tp.baslangic)} başlangıç</p>
@@ -623,7 +565,6 @@ function KartDetay({
               )
             })}
 
-            {/* Eski format taksitler */}
             {(guncelKart.taksitler || []).map((t) => {
               const kalanToplam = t.aylik_odemeler
                 ? t.aylik_odemeler.reduce((s, v) => s + v, 0)
@@ -631,18 +572,12 @@ function KartDetay({
               const odenmisTaksit = t.toplam_taksit - t.kalan_taksit
               return (
                 <div key={t.id} className="glass rounded-xl p-3 sm:p-4 border border-warning/20">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-white truncate">{t.aciklama}</p>
-                      <p className="text-xs text-white/50">
-                        {t.kalan_taksit}/{t.toplam_taksit} taksit kaldı · {formatPara(t.aylik_tutar)}/ay
-                      </p>
-                    </div>
+                  <div className="flex-1 min-w-0 mb-2">
+                    <p className="text-sm font-bold text-white truncate">{t.aciklama}</p>
+                    <p className="text-xs text-white/50">{t.kalan_taksit}/{t.toplam_taksit} taksit kaldı · {formatPara(t.aylik_tutar)}/ay</p>
                   </div>
-                  <div className="mb-2">
-                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full bg-warning rounded-full" style={{ width: `${(odenmisTaksit / t.toplam_taksit) * 100}%` }} />
-                    </div>
+                  <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mb-1.5">
+                    <div className="h-full bg-warning rounded-full" style={{ width: `${(odenmisTaksit / t.toplam_taksit) * 100}%` }} />
                   </div>
                   <div className="flex justify-between items-center">
                     <p className="text-xs text-warning/60">İlk ödeme: {t.sonraki_taksit_tarihi}</p>
@@ -765,6 +700,92 @@ function KartDetay({
           </div>
         </Card>
       )}
+
+      {/* ── KART ENTEGRASYONu — collapsible, en altta ── */}
+      <div className="glass rounded-xl border border-white/10 overflow-hidden">
+        <button
+          onClick={() => setEntegrasyonAcik((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/5 transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="text-base">📱</span>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-white">Kart Entegrasyonu</p>
+              <p className="text-[10px] text-white/40">Ekstre borcu ve dönem içi harcamayı güncelle</p>
+            </div>
+          </div>
+          {entegrasyonAcik
+            ? <ChevronUp className="w-4 h-4 text-white/40" />
+            : <ChevronDown className="w-4 h-4 text-white/40" />}
+        </button>
+
+        {entegrasyonAcik && (
+          <div className="border-t border-white/10 px-4 pt-4 pb-5 space-y-4">
+            <div className="glass rounded-lg p-3 border border-yellow-500/20">
+              <p className="text-xs text-yellow-400/80">
+                ⚠️ Bu alandaki değerler doğrudan kaydedilir. Bankacılık uygulamanıza bakarak doldurun.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-white/70 mb-1">
+                📋 Güncel Ekstre Borcu (TL)
+              </label>
+              <p className="text-[10px] text-white/30 mb-2">Kilitlenmiş ekstre — gelecek son ödeme tarihinde ödenecek</p>
+              <input
+                type="number"
+                value={ekstreEditDeger}
+                onChange={(e) => setEkstreEditDeger(e.target.value)}
+                placeholder="0"
+                min="0"
+                className="w-full px-4 py-2.5 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              {guncelKart.donem_borcu !== undefined && (
+                <p className="text-[10px] text-white/30 mt-1">Mevcut: {formatPara(guncelKart.donem_borcu)}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-white/70 mb-1">
+                🛒 Dönem İçi Harcama (TL)
+              </label>
+              <p className="text-[10px] text-white/30 mb-2">Henüz ekstreye girmemiş, bu dönem yapılan harcamalar</p>
+              <input
+                type="number"
+                value={donemIciEditDeger}
+                onChange={(e) => setDonemIciEditDeger(e.target.value)}
+                placeholder="0"
+                min="0"
+                className="w-full px-4 py-2.5 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              {guncelKart.donem_ici_harcama !== undefined && (
+                <p className="text-[10px] text-white/30 mt-1">Mevcut: {formatPara(guncelKart.donem_ici_harcama)}</p>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <Button
+                onClick={() => {
+                  setEkstreEditDeger(guncelKart.donem_borcu?.toString() || '')
+                  setDonemIciEditDeger(guncelKart.donem_ici_harcama?.toString() || '')
+                }}
+                variant="secondary"
+                className="flex-1 text-sm"
+              >
+                Sıfırla
+              </Button>
+              <Button onClick={handleEntegrasyonSave} variant="success" className="flex-1 text-sm">
+                Kaydet
+              </Button>
+              {guncelKart.donem_borcu && guncelKart.donem_borcu > 0 && (
+                <Button onClick={() => setOdemeModalOpen(true)} variant="primary" className="flex-1 text-sm">
+                  💰 Ekstre Öde
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Modals */}
       <KrediKartiEkleModal

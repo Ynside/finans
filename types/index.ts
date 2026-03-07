@@ -24,18 +24,6 @@ export interface OdemeGecmisi {
   tarih: string;
 }
 
-export interface FinansalVeriler {
-  nakit_bakiye: number;
-  borclar: Borc[];
-  maas: Maaş;
-  son_maas_tarihi: string | null; // YYYY-MM formatında
-  odeme_gecmisi: OdemeGecmisi[];
-  hedefler?: BudgetGoal[];
-  harcamalar?: Harcama[];
-  kredi_kartlari?: KrediKarti[];
-  ek_gelirler?: EkGelir[];
-}
-
 export interface FinansalDurum {
   nakit: number;
   toplam_borc: number;
@@ -159,6 +147,17 @@ export interface EkGelir {
   son_ekleme_tarihi: string | null; // YYYY-MM
 }
 
+export interface SabitGider {
+  id: number;
+  aciklama: string;
+  tutar: number;
+  gun: number; // 1-31, ödeme günü
+  tip: 'nakit' | 'kredi_karti';
+  kredi_karti_id?: number; // tip === 'kredi_karti' ise
+  son_islem_tarihi: string | null; // YYYY-MM
+  kategori?: string;
+}
+
 export interface FinansalVeriler {
   nakit_bakiye: number;
   borclar: Borc[];
@@ -169,5 +168,6 @@ export interface FinansalVeriler {
   harcamalar?: Harcama[];
   kredi_kartlari?: KrediKarti[];
   ek_gelirler?: EkGelir[];
+  sabit_giderler?: SabitGider[];
 }
 
