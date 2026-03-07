@@ -119,14 +119,18 @@ export function OnboardingWizard({ onTamamla }: OnboardingWizardProps) {
       }
     })
 
-    const yapilmisKartlar: KrediKarti[] = kartlar.map((k, idx) => ({
-      id: idx + 1,
-      ad: k.ad,
-      ekstre_kesim_gunu: parseInt(k.ekstreKesimGunu) || 25,
-      son_odeme_gunu: parseInt(k.sonOdemeGunu) || 10,
-      limit: parseTutar(k.limit) || undefined,
-      bakiye: parseTutar(k.bakiye) || 0,
-    }))
+    const yapilmisKartlar: KrediKarti[] = kartlar.map((k, idx) => {
+      const mevcutBorc = parseTutar(k.bakiye) || 0
+      return {
+        id: idx + 1,
+        ad: k.ad,
+        ekstre_kesim_gunu: parseInt(k.ekstreKesimGunu) || 25,
+        son_odeme_gunu: parseInt(k.sonOdemeGunu) || 10,
+        limit: parseTutar(k.limit) || undefined,
+        donem_borcu: mevcutBorc,
+        bakiye: mevcutBorc,
+      }
+    })
 
     const yeniVeriler: FinansalVeriler = {
       nakit_bakiye: parseTutar(nakitBakiye) || 0,
